@@ -6,12 +6,14 @@ import bcrypt from 'bcryptjs';
 const globalForDb = globalThis;
 
 function createPool() {
-  const connectionString = process.env.DATABASE_URL;
+const connectionString =
+  process.env.DATABASE_URL ||
+  process.env.POSTGRES_URL ||
+  process.env.POSTGRES_PRISMA_URL;
   if (!connectionString) {
-    throw new Error(
-      'Thiếu biến môi trường DATABASE_URL. Tạo database Postgres (khuyến nghị: neon.tech, miễn phí) ' +
-      'rồi đặt DATABASE_URL trong .env.local (dev) hoặc Environment Variables trên Vercel (production). Xem README.'
-    );
+  throw new Error(
+  'Thiếu biến môi trường kết nối PostgreSQL. Hãy cấu hình DATABASE_URL hoặc POSTGRES_URL trên Vercel.'
+  );
   }
   return new Pool({
     connectionString,
