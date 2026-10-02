@@ -1,0 +1,92 @@
+html, body {
+  font-family: var(--font-body);
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+h1, h2, h3, .font-display {
+  font-family: var(--font-display);
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #C6CABE; border-radius: 4px; }
+
+* { box-sizing: border-box; }
+
+.focus-ring:focus-visible {
+  outline: 2px solid var(--color-teal);
+  outline-offset: 2px;
+}
+
+.form-control {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-line);
+  border-radius: 0.375rem;
+  background-color: #fff;
+  color: var(--color-ink);
+  font-size: 0.875rem;
+  outline: none;
+}
+
+.form-control:focus {
+  border-color: var(--color-teal);
+}
+
+.form-control:focus-visible {
+  outline: 2px solid var(--color-teal);
+  outline-offset: 2px;
+}
+
+.form-control:disabled {
+  background-color: var(--color-paper);
+  color: var(--color-slate);
+}
+
+.form-control--compact {
+  padding: 0.375rem 0.625rem;
+  border-radius: 0.25rem;
+}
+
+.form-control--textarea {
+  resize: none;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--color-ink);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.button-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.5rem 1rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background-color: var(--color-teal);
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background-color 150ms;
+}
+
+.button-primary:hover {
+  background-color: var(--color-teal-dark);
+}
+
+.button-primary:focus-visible {
+  outline: 2px solid var(--color-teal);
+  outline-offset: 2px;
+}
+
+.surface-panel {
+  border: 1px solid var(--color-line);
+  border-radius: 0.5rem;
+  background-color: var(--color-paper-raised);
+}

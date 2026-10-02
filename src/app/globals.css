@@ -38,3 +38,77 @@ h1, h2, h3, .font-display {
   outline: 2px solid var(--color-teal);
   outline-offset: 2px;
 }
+
+/* Sơ đồ tổ chức dạng cây — khối chữ nhật màu đặc nối bằng đường kẻ vuông góc */
+.node-box {
+  background: var(--color-teal);
+  color: #fff;
+  min-width: 148px;
+  padding: 10px 16px;
+  text-align: center;
+  line-height: 1.35;
+}
+.node-title {
+  font-size: 12px;
+  opacity: 0.92;
+}
+.node-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.org-tree ul {
+  padding-top: 24px;
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+.org-tree li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  list-style: none;
+  position: relative;
+  padding: 24px 12px 0 12px;
+}
+.org-tree li::before,
+.org-tree li::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 50%;
+  border-top: 2px solid var(--color-teal);
+  width: 50%;
+  height: 24px;
+}
+.org-tree li::after {
+  right: auto;
+  left: 50%;
+  border-left: 2px solid var(--color-teal);
+}
+.org-tree li:only-child::after,
+.org-tree li:only-child::before {
+  display: none;
+}
+.org-tree li:only-child {
+  padding-top: 0;
+}
+.org-tree li:first-child::before,
+.org-tree li:last-child::after {
+  border: 0 none;
+}
+.org-tree li:last-child::before {
+  border-right: 2px solid var(--color-teal);
+}
+.org-tree > ul > li {
+  padding-top: 0;
+}
+.org-tree ul ul::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  border-left: 2px solid var(--color-teal);
+  width: 0;
+  height: 24px;
+}

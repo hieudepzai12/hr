@@ -5,17 +5,27 @@ import { withAuth } from '@/lib/auth';
 
 const COLORS = ['#2C5F5D', '#C97B4A', '#5B5F97', '#8A9B6E', '#B85C5C', '#4A7B8C'];
 
-export const GET = withAuth(async (req) => {
+export const GET = withAuth(async (req, ctx, user) => {
   const { searchParams } = new URL(req.url);
   const department_id = searchParams.get('department_id');
   const status = searchParams.get('status');
   const search = searchParams.get('search');
+  const isManager = ['admin', 'manager'].includes(user.role);
 
   let sql = `SELECT e.id, e.full_name, e.email, e.role, e.position, e.department_id,
              e.phone, e.join_date, e.status, e.avatar_color, e.avatar_path, d.name as department_name
              FROM employees e LEFT JOIN departments d ON e.department_id = d.id WHERE 1=1`;
   const params = [];
-  if (department_id) { params.push(department_id); sql += ` AND e.department_id = $${params.length}`; }
+
+  if (!isManager) {
+    // Nhân viên thường: chỉ xem được đồng nghiệp cùng phòng ban của mình, bỏ qua mọi filter khác từ client.
+    const { rows: meRows } = await query('SELECT department_id FROM employees WHERE id = $1', [user.id]);
+    const myDeptId = meRows[0]?.department_id ?? -1;
+    params.push(myDeptId);
+    sql += ` AND e.department_id = $${params.length}`;
+  } else {
+    if (department_id) { params.push(department_id); sql += ` AND e.department_id = $${params.length}`; }
+  }
   if (status) { params.push(status); sql += ` AND e.status = $${params.length}`; }
   if (search) { params.push(`%${search}%`); sql += ` AND (e.full_name ILIKE $${params.length} OR e.email ILIKE $${params.length})`; }
   sql += ' ORDER BY e.full_name';

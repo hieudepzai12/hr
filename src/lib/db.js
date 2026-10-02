@@ -6,14 +6,12 @@ import bcrypt from 'bcryptjs';
 const globalForDb = globalThis;
 
 function createPool() {
-const connectionString =
-  process.env.DATABASE_URL ||
-  process.env.POSTGRES_URL ||
-  process.env.POSTGRES_PRISMA_URL;
+  const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
-  throw new Error(
-  'Thiếu biến môi trường kết nối PostgreSQL. Hãy cấu hình DATABASE_URL hoặc POSTGRES_URL trên Vercel.'
-  );
+    throw new Error(
+      'Thiếu biến môi trường DATABASE_URL. Tạo database Postgres (khuyến nghị: neon.tech, miễn phí) ' +
+      'rồi đặt DATABASE_URL trong .env.local (dev) hoặc Environment Variables trên Vercel (production). Xem README.'
+    );
   }
   return new Pool({
     connectionString,
@@ -23,21 +21,17 @@ const connectionString =
   });
 }
 
-function getPool() {
-  if (!globalForDb.__hrPgPool) {
-    globalForDb.__hrPgPool = createPool();
-  }
-  return globalForDb.__hrPgPool;
-}
+const pool = globalForDb.__hrPgPool || createPool();
+if (process.env.NODE_ENV !== 'production') globalForDb.__hrPgPool = pool;
 
 /** Chạy một câu truy vấn SQL, trả về { rows, rowCount } giống pg gốc. */
 export function query(text, params) {
-  return getPool().query(text, params);
+  return pool.query(text, params);
 }
 
 /** Lấy dòng đầu tiên, hoặc null nếu không có kết quả. */
 export async function queryOne(text, params) {
-  const { rows } = await getPool().query(text, params);
+  const { rows } = await pool.query(text, params);
   return rows[0] || null;
 }
 
@@ -50,7 +44,7 @@ export function ensureSchema() {
 }
 
 async function initSchema() {
-  await getPool().query(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS departments (
       id SERIAL PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,
@@ -129,9 +123,9 @@ async function initSchema() {
   `);
 
   // Postgres >= 9.6 hỗ trợ IF NOT EXISTS cho ADD COLUMN — an toàn khi chạy lại nhiều lần.
-  await getPool().query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS avatar_path TEXT');
+  await pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS avatar_path TEXT');
 
-  const { rows } = await getPool().query('SELECT COUNT(*)::int AS c FROM employees');
+  const { rows } = await pool.query('SELECT COUNT(*)::int AS c FROM employees');
   if (rows[0].c === 0) {
     await seed();
   }
@@ -146,7 +140,7 @@ async function seed() {
   ];
   const deptIds = {};
   for (const [name, description] of deptRows) {
-    const { rows } = await getPool().query(
+    const { rows } = await pool.query(
       'INSERT INTO departments (name, description) VALUES ($1, $2) RETURNING id',
       [name, description]
     );
@@ -167,7 +161,7 @@ async function seed() {
   const empIds = {};
   for (let i = 0; i < seedEmployees.length; i++) {
     const e = seedEmployees[i];
-    const { rows } = await getPool().query(
+    const { rows } = await pool.query(
       `INSERT INTO employees (full_name, email, password_hash, role, position, department_id, phone, join_date, avatar_color)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
       [e[0], e[1], hash(e[2]), e[3], e[4], e[5], e[6], e[7], colors[i % colors.length]]
@@ -183,21 +177,21 @@ async function seed() {
     ['Báo cáo tài chính quý 3', 'Tổng hợp số liệu chi tiêu và doanh thu', empIds['admin@company.vn'], empIds['admin@company.vn'], 'in_progress', 'high', '2026-09-01', '2026-09-30', 30],
   ];
   for (const t of tasks) {
-    await getPool().query(
+    await pool.query(
       `INSERT INTO tasks (title, description, assignee_id, created_by, status, priority, start_date, due_date, progress)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       t
     );
   }
 
-  await getPool().query(
+  await pool.query(
     `INSERT INTO reports (title, content, type, employee_id, status, period_start, period_end) VALUES
      ('Báo cáo tuần 36', 'Đã hoàn thành 60% module đăng nhập, dự kiến xong tuần sau.', 'weekly', $1, 'submitted', '2026-09-01', '2026-09-07'),
      ('Báo cáo tuần 36', 'Hoàn thành wireframe Dashboard, đang chờ feedback.', 'weekly', $2, 'reviewed', '2026-09-01', '2026-09-07')`,
     [empIds['binh@company.vn'], empIds['ha@company.vn']]
   );
 
-  await getPool().query(
+  await pool.query(
     `INSERT INTO kpi_evaluations (employee_id, period, criteria, total_score, rating, comments, evaluated_by)
      VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7)`,
     [

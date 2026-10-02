@@ -2,12 +2,24 @@ import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { withAuth } from '@/lib/auth';
 
-export const GET = withAuth(async () => {
+export const GET = withAuth(async (req, ctx, user) => {
+  const isManager = ['admin', 'manager'].includes(user.role);
+  if (isManager) {
+    const { rows } = await query(`
+      SELECT d.*, COUNT(e.id) FILTER (WHERE e.status = 'active') AS employee_count
+      FROM departments d
+      LEFT JOIN employees e ON e.department_id = d.id
+      GROUP BY d.id ORDER BY d.name`);
+    return NextResponse.json(rows);
+  }
+
+  // Nhân viên thường: chỉ thấy phòng ban của chính mình.
   const { rows } = await query(`
     SELECT d.*, COUNT(e.id) FILTER (WHERE e.status = 'active') AS employee_count
     FROM departments d
     LEFT JOIN employees e ON e.department_id = d.id
-    GROUP BY d.id ORDER BY d.name`);
+    WHERE d.id = (SELECT department_id FROM employees WHERE id = $1)
+    GROUP BY d.id ORDER BY d.name`, [user.id]);
   return NextResponse.json(rows);
 });
 

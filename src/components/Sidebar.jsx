@@ -2,13 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutGrid, Users, FileText, CalendarClock, Target, UserCircle, LogOut } from 'lucide-react';
+import { LayoutGrid, Users, Building2, Network, FileText, CalendarClock, Target, UserCircle, LogOut } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import Avatar from './Avatar';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Tổng quan', icon: LayoutGrid, exact: true },
-  { to: '/nhan-vien', label: 'Nhân viên', icon: Users, managerOnly: true },
+  { to: '/nhan-vien', label: 'Nhân viên', icon: Users },
+  { to: '/so-do-to-chuc', label: 'Sơ đồ tổ chức', icon: Network },
+  { to: '/phong-ban', label: 'Phòng ban', icon: Building2, managerOnly: true },
   { to: '/bao-cao', label: 'Báo cáo', icon: FileText },
   { to: '/timeline', label: 'Timeline & Deadline', icon: CalendarClock },
   { to: '/kpi', label: 'Đánh giá KPI', icon: Target },

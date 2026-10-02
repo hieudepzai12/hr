@@ -106,6 +106,8 @@ hr-nextjs/
 - **Timeline & Deadline:** bảng Kanban 4 cột, hiển thị số ngày còn lại/quá hạn, thanh tiến độ, đính kèm file bằng chứng công việc.
 - **Quản lý nhân viên:** hồ sơ, phòng ban, vai trò, trạng thái làm việc, ảnh đại diện.
 - **Đánh giá KPI:** tiêu chí tuỳ chỉnh có trọng số, tự tính điểm tổng kết và xếp loại.
+- **Phòng ban & Sơ đồ tổ chức:** quản lý/quản trị viên thêm/sửa/xoá phòng ban (trang "Phòng ban"); mọi người xem "Sơ đồ tổ chức" dạng lưới trực quan, mỗi phòng ban hiển thị người quản lý (biểu tượng vương miện) và thành viên.
+- **Phân quyền theo phòng ban:** quản lý/quản trị viên xem được **toàn bộ** nhân viên và phòng ban (chế độ đầy đủ). Nhân viên thường chỉ xem được **đồng nghiệp cùng phòng ban của mình** — cả ở trang "Nhân viên" lẫn "Sơ đồ tổ chức" (giới hạn ở tầng API, không thể bỏ qua từ trình duyệt).
 - **Bảo mật file đính kèm:** file báo cáo/công việc không có URL công khai — mọi lượt tải đều đi qua API có xác thực, kiểm tra đúng người liên quan (chủ báo cáo/người được giao việc, hoặc quản lý/quản trị viên) mới tải được.
 
 ## Ghi chú về bảo mật file trên Vercel Blob

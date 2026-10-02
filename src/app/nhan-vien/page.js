@@ -261,7 +261,7 @@ function EmployeesContent() {
 
 export default function EmployeesPage() {
   return (
-    <ProtectedRoute managerOnly>
+    <ProtectedRoute>
       <EmployeesContent />
     </ProtectedRoute>
   );
