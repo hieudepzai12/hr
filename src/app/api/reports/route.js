@@ -16,7 +16,7 @@ export const GET = withAuth(async (req, ctx, user) => {
              WHERE 1=1`;
   const params = [];
 
-  if (user.role === 'employee') {
+  if (!['admin', 'director', 'manager'].includes(user.role) && !user.permissions.reports.manage) {
     params.push(user.id);
     sql += ` AND r.employee_id = $${params.length}`;
   } else if (employee_id) {

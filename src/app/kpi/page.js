@@ -23,7 +23,8 @@ const DEFAULT_CRITERIA = [
 ];
 
 function KpiContent() {
-  const { isManager } = useAuth();
+  const { can } = useAuth();
+  const isManager = can('kpi', 'manage');
   const [evaluations, setEvaluations] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);

@@ -18,7 +18,7 @@ export const GET = withAuth(async (req, ctx, user) => {
              WHERE 1=1`;
   const params = [];
 
-  if (user.role === 'employee') {
+  if (!['admin', 'director', 'manager'].includes(user.role) && !user.permissions.tasks.manage) {
     params.push(user.id);
     sql += ` AND t.assignee_id = $${params.length}`;
   } else if (assignee_id) {
@@ -44,4 +44,4 @@ export const POST = withAuth(async (req, ctx, user) => {
     [title, description || null, assignee_id || null, user.id, status || 'todo', priority || 'medium', start_date || null, due_date, progress || 0]
   );
   return NextResponse.json(rows[0], { status: 201 });
-}, { roles: ['admin', 'manager'] });
+}, { roles: ['admin', 'director', 'manager'] });

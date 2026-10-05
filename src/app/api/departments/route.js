@@ -3,7 +3,7 @@ import { query } from '@/lib/db';
 import { withAuth } from '@/lib/auth';
 
 export const GET = withAuth(async (req, ctx, user) => {
-  const isManager = ['admin', 'manager'].includes(user.role);
+  const isManager = ['admin', 'director', 'manager'].includes(user.role) || user.permissions.departments.manage;
   if (isManager) {
     const { rows } = await query(`
       SELECT d.*, COUNT(e.id) FILTER (WHERE e.status = 'active') AS employee_count
@@ -36,4 +36,4 @@ export const POST = withAuth(async (req) => {
     if (e.code === '23505') return NextResponse.json({ error: 'Tên phòng ban đã tồn tại' }, { status: 400 });
     throw e;
   }
-}, { roles: ['admin', 'manager'] });
+}, { roles: ['admin', 'director', 'manager'] });

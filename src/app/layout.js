@@ -2,7 +2,7 @@ import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 
 export const metadata = {
-  title: "NhanSu — Quản lý nhân sự",
+  title: "OTIS — Quản lý nhân sự",
   description: "Hệ thống quản lý nhân sự nội bộ",
 };
 

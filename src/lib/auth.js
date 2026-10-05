@@ -1,6 +1,8 @@
 import jwt from 'jsonwebtoken';
 import { NextResponse } from 'next/server';
-import { ensureSchema } from './db';
+import { ensureSchema, queryOne } from './db';
+import { permissionForRequest } from './permissions';
+import { getRolePermissions } from './role-permissions';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
 
@@ -38,9 +40,16 @@ export function forbidden(message = 'Bạn không có quyền thực hiện thao
 export function withAuth(handler, { roles } = {}) {
   return async (req, ctx) => {
     await ensureSchema();
-    const user = getUserFromRequest(req);
-    if (!user) return unauthorized();
-    if (roles && !roles.includes(user.role)) return forbidden();
+    const tokenUser = getUserFromRequest(req);
+    if (!tokenUser) return unauthorized();
+    const user = await queryOne('SELECT id, email, full_name, role, status, permissions FROM employees WHERE id = $1', [tokenUser.id]);
+    if (!user || user.status !== 'active') return unauthorized();
+    user.permissions = await getRolePermissions(user.role);
+    const required = permissionForRequest(new URL(req.url).pathname, req.method);
+    const customManager = user.role.startsWith('custom_') && roles?.includes('manager') &&
+      required?.[1] === 'manage' && user.permissions[required[0]]?.manage;
+    if (roles && !roles.includes(user.role) && !customManager) return forbidden();
+    if (required && !user.permissions[required[0]]?.[required[1]]) return forbidden();
     return handler(req, ctx, user);
   };
 }

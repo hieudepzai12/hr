@@ -4,7 +4,7 @@ import { withAuth, forbidden } from '@/lib/auth';
 import { savePrivateAttachment } from '@/lib/uploads';
 
 function canAccessTask(task, user) {
-  if (['admin', 'manager'].includes(user.role)) return true;
+  if (['admin', 'director', 'manager'].includes(user.role)) return true;
   return task.assignee_id === user.id;
 }
 

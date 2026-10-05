@@ -3,7 +3,7 @@ import { query, queryOne } from '@/lib/db';
 import { withAuth } from '@/lib/auth';
 
 export const GET = withAuth(async (req, ctx, user) => {
-  const isManager = ['admin', 'manager'].includes(user.role);
+  const isManager = ['admin', 'director', 'manager'].includes(user.role) || user.permissions.employees.manage;
 
   const { rows: totalEmployeesRows } = await query(`SELECT COUNT(*)::int AS c FROM employees WHERE status = 'active'`);
   const totalEmployees = totalEmployeesRows[0].c;

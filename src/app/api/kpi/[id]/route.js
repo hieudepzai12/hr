@@ -6,4 +6,4 @@ export const DELETE = withAuth(async (req, { params }) => {
   const { id } = await params;
   await query('DELETE FROM kpi_evaluations WHERE id = $1', [id]);
   return NextResponse.json({ success: true });
-}, { roles: ['admin', 'manager'] });
+}, { roles: ['admin', 'director', 'manager'] });

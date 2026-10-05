@@ -9,8 +9,8 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import { useAuth } from '@/context/AuthContext';
 
 function DepartmentsContent() {
-  const { user } = useAuth();
-  const isAdmin = user.role === 'admin';
+  const { can } = useAuth();
+  const isAdmin = can('departments', 'manage');
   const [departments, setDepartments] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -119,7 +119,7 @@ function DepartmentsContent() {
 
 export default function DepartmentsPage() {
   return (
-    <ProtectedRoute managerOnly>
+    <ProtectedRoute>
       <DepartmentsContent />
     </ProtectedRoute>
   );

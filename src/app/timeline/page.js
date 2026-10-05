@@ -31,7 +31,8 @@ function DueLabel({ date, status }) {
 }
 
 function TimelineContent() {
-  const { isManager } = useAuth();
+  const { can } = useAuth();
+  const isManager = can('tasks', 'manage');
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);

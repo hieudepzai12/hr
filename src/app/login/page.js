@@ -5,12 +5,6 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { ArrowRight } from 'lucide-react';
 
-const DEMO_ACCOUNTS = [
-  { label: 'Quản trị viên', email: 'admin@company.vn', password: 'admin123' },
-  { label: 'Quản lý', email: 'manager@company.vn', password: 'manager123' },
-  { label: 'Nhân viên', email: 'binh@company.vn', password: 'employee123' },
-];
-
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -24,11 +18,6 @@ export default function LoginPage() {
     const res = await login(email, password);
     if (res.success) router.push('/');
     else setError(res.error);
-  };
-
-  const fillDemo = (acc) => {
-    setEmail(acc.email);
-    setPassword(acc.password);
   };
 
   return (
@@ -97,21 +86,6 @@ export default function LoginPage() {
               {!loading && <ArrowRight size={16} />}
             </button>
           </form>
-
-          <div className="mt-6 pt-6 border-t border-line">
-            <p className="text-xs text-slate mb-2.5">Tài khoản dùng thử</p>
-            <div className="flex flex-wrap gap-2">
-              {DEMO_ACCOUNTS.map((acc) => (
-                <button
-                  key={acc.email}
-                  onClick={() => fillDemo(acc)}
-                  className="text-xs px-3 py-1.5 rounded-full border border-line hover:border-teal hover:text-teal transition-colors focus-ring"
-                >
-                  {acc.label}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
     </div>

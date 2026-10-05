@@ -11,7 +11,7 @@ export const PUT = withAuth(async (req, { params }) => {
   );
   if (!rows[0]) return NextResponse.json({ error: 'Không tìm thấy phòng ban' }, { status: 404 });
   return NextResponse.json(rows[0]);
-}, { roles: ['admin', 'manager'] });
+}, { roles: ['admin', 'director', 'manager'] });
 
 export const DELETE = withAuth(async (req, { params }) => {
   const { id } = await params;

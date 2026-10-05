@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import api from '@/lib/api';
+import { effectivePermissions } from '@/lib/permissions';
 
 const AuthContext = createContext(null);
 
@@ -12,8 +13,14 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     const stored = localStorage.getItem('hr_user');
-    if (stored) setUser(JSON.parse(stored));
-    setReady(true);
+    if (stored) queueMicrotask(() => setUser(JSON.parse(stored)));
+    if (localStorage.getItem('hr_token')) {
+      api.get('/auth/me').then(({ data }) => {
+        localStorage.setItem('hr_user', JSON.stringify(data));
+        setUser(data);
+      }).catch(() => {});
+    }
+    queueMicrotask(() => setReady(true));
   }, []);
 
   const login = useCallback(async (email, password) => {
@@ -45,8 +52,10 @@ export function AuthProvider({ children }) {
     });
   }, []);
 
+  const permissions = user ? effectivePermissions(user.role, user.permissions) : {};
+  const can = (module, action = 'view') => Boolean(permissions[module]?.[action]);
   return (
-    <AuthContext.Provider value={{ user, login, logout, updateUser, loading, ready, isManager: user && ['admin', 'manager'].includes(user.role) }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUser, loading, ready, can, isManager: user && (['admin', 'director', 'manager'].includes(user.role) || Object.values(permissions).some((value) => value.manage)) }}>
       {children}
     </AuthContext.Provider>
   );

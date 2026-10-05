@@ -10,7 +10,8 @@ export const PUT = withAuth(async (req, { params }, user) => {
     return forbidden('Không có quyền chỉnh sửa công việc này');
   }
 
-  const isManager = ['admin', 'manager'].includes(user.role);
+  const isManager = ['admin', 'director', 'manager'].includes(user.role) || user.permissions.tasks.manage;
+  if (isManager && !user.permissions.tasks.manage) return forbidden();
   const body = await req.json();
   const { title, description, assignee_id, status, priority, start_date, due_date, progress } = body;
 
@@ -38,4 +39,4 @@ export const DELETE = withAuth(async (req, { params }) => {
   const { id } = await params;
   await query('DELETE FROM tasks WHERE id = $1', [id]);
   return NextResponse.json({ success: true });
-}, { roles: ['admin', 'manager'] });
+}, { roles: ['admin', 'director', 'manager'] });

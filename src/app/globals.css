@@ -103,6 +103,13 @@ h1, h2, h3, .font-display {
 .org-tree > ul > li {
   padding-top: 0;
 }
+.org-tree > ul {
+  padding-top: 0;
+}
+.org-tree > ul > li::before,
+.org-tree > ul > li::after {
+  display: none;
+}
 .org-tree ul ul::before {
   content: '';
   position: absolute;

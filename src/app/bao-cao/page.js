@@ -14,7 +14,8 @@ import { useAuth } from '@/context/AuthContext';
 const TYPE_LABEL = { daily: 'Hàng ngày', weekly: 'Hàng tuần', monthly: 'Hàng tháng', project: 'Dự án' };
 
 function ReportsContent() {
-  const { isManager } = useAuth();
+  const { can } = useAuth();
+  const isManager = can('reports', 'manage');
   const [reports, setReports] = useState([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [detail, setDetail] = useState(null);

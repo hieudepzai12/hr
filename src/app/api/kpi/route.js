@@ -21,7 +21,7 @@ export const GET = withAuth(async (req, ctx, user) => {
              LEFT JOIN employees ev ON k.evaluated_by = ev.id
              WHERE 1=1`;
   const params = [];
-  if (user.role === 'employee') {
+  if (!['admin', 'director', 'manager'].includes(user.role) && !user.permissions.kpi.manage) {
     params.push(user.id);
     sql += ` AND k.employee_id = $${params.length}`;
   } else if (employee_id) {
@@ -52,4 +52,4 @@ export const POST = withAuth(async (req, ctx, user) => {
     [employee_id, period, JSON.stringify(criteria), totalScore, rating, comments || null, user.id]
   );
   return NextResponse.json(rows[0], { status: 201 });
-}, { roles: ['admin', 'manager'] });
+}, { roles: ['admin', 'director', 'manager'] });

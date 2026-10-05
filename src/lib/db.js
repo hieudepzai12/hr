@@ -58,6 +58,7 @@ async function initSchema() {
       email TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL DEFAULT 'employee',
+      manager_id INTEGER REFERENCES employees(id) ON DELETE SET NULL,
       position TEXT,
       department_id INTEGER REFERENCES departments(id) ON DELETE SET NULL,
       phone TEXT,
@@ -65,7 +66,15 @@ async function initSchema() {
       status TEXT NOT NULL DEFAULT 'active',
       avatar_color TEXT DEFAULT '#2C5F5D',
       avatar_path TEXT,
+      permissions JSONB NOT NULL DEFAULT '{}'::jsonb,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS role_permissions (
+      role TEXT PRIMARY KEY,
+      label TEXT,
+      permissions JSONB NOT NULL DEFAULT '{}'::jsonb,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS reports (
@@ -124,6 +133,19 @@ async function initSchema() {
 
   // Postgres >= 9.6 hỗ trợ IF NOT EXISTS cho ADD COLUMN — an toàn khi chạy lại nhiều lần.
   await pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS avatar_path TEXT');
+  const { rows: managerColumns } = await pool.query("SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'employees' AND column_name = 'manager_id'");
+  await pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS manager_id INTEGER REFERENCES employees(id) ON DELETE SET NULL');
+  if (!managerColumns.length) {
+    await pool.query(`UPDATE employees AS staff SET manager_id = lead.id
+      FROM employees AS lead
+      WHERE lead.email = 'manager@company.vn' AND lead.role = 'manager' AND lead.status = 'active'
+        AND staff.email IN ('binh@company.vn', 'ha@company.vn')
+        AND staff.role = 'employee' AND staff.department_id = lead.department_id
+        AND staff.manager_id IS NULL`);
+  }
+  await pool.query("ALTER TABLE employees ADD COLUMN IF NOT EXISTS permissions JSONB NOT NULL DEFAULT '{}'::jsonb");
+  await pool.query('ALTER TABLE role_permissions ADD COLUMN IF NOT EXISTS label TEXT');
+  await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS role_permissions_label_unique ON role_permissions (LOWER(label)) WHERE label IS NOT NULL');
 
   const { rows } = await pool.query('SELECT COUNT(*)::int AS c FROM employees');
   if (rows[0].c === 0) {
@@ -168,6 +190,8 @@ async function seed() {
     );
     empIds[e[1]] = rows[0].id;
   }
+  await pool.query('UPDATE employees SET manager_id = $1 WHERE id = ANY($2::int[])',
+    [empIds['manager@company.vn'], [empIds['binh@company.vn'], empIds['ha@company.vn']]]);
 
   const tasks = [
     ['Hoàn thiện module đăng nhập', 'Xây dựng luồng xác thực JWT cho hệ thống', empIds['binh@company.vn'], empIds['manager@company.vn'], 'in_progress', 'high', '2026-09-01', '2026-09-15', 60],

@@ -14,4 +14,4 @@ export const PUT = withAuth(async (req, { params }, user) => {
   );
   if (!rows[0]) return NextResponse.json({ error: 'Không tìm thấy báo cáo' }, { status: 404 });
   return NextResponse.json(rows[0]);
-}, { roles: ['admin', 'manager'] });
+}, { roles: ['admin', 'director', 'manager'] });

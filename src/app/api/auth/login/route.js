@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { queryOne, ensureSchema } from '@/lib/db';
 import { signToken } from '@/lib/auth';
+import { getRolePermissions, getRoleLabel } from '@/lib/role-permissions';
 
 export async function POST(req) {
   await ensureSchema();
@@ -23,5 +24,5 @@ export async function POST(req) {
   const token = signToken({ id: emp.id, email: emp.email, role: emp.role, full_name: emp.full_name });
   const { password_hash, ...safeEmp } = emp;
 
-  return NextResponse.json({ token, user: safeEmp });
+  return NextResponse.json({ token, user: { ...safeEmp, role_label: await getRoleLabel(safeEmp.role), permissions: await getRolePermissions(safeEmp.role) } });
 }
