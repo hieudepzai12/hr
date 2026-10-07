@@ -10,6 +10,8 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import { PriorityBadge } from '@/components/Badges';
 import Attachments from '@/components/Attachments';
 import { useAuth } from '@/context/AuthContext';
+import usePagedList from '@/lib/usePagedList';
+import LoadMore from '@/components/LoadMore';
 
 const COLUMNS = [
   { key: 'todo', label: 'Chưa bắt đầu' },
@@ -33,16 +35,14 @@ function DueLabel({ date, status }) {
 function TimelineContent() {
   const { can } = useAuth();
   const isManager = can('tasks', 'manage');
-  const [tasks, setTasks] = useState([]);
+  const { items: tasks, hasMore, loadingMore, error: listError, refresh: load, loadMore } = usePagedList('/tasks');
   const [employees, setEmployees] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({});
   const [error, setError] = useState('');
 
-  const load = () => api.get('/tasks').then(({ data }) => setTasks(data));
-  useEffect(() => { load(); }, []);
-  useEffect(() => { if (isManager) api.get('/employees').then(({ data }) => setEmployees(data)); }, [isManager]);
+  useEffect(() => { if (isManager) api.get('/employees', { params: { fields: 'options', status: 'active' } }).then(({ data }) => setEmployees(data)); }, [isManager]);
 
   const openCreate = () => {
     setEditing(null);
@@ -86,6 +86,7 @@ function TimelineContent() {
         </button>
       )}
     >
+      {listError && <p role="alert" className="mb-4 text-sm text-clay">{listError}</p>}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {COLUMNS.map((col) => {
           const colTasks = tasks.filter((t) => t.status === col.key);
@@ -131,6 +132,8 @@ function TimelineContent() {
           );
         })}
       </div>
+
+      <LoadMore hasMore={hasMore} loading={loadingMore} onClick={loadMore} />
 
       {modalOpen && (
         <Modal title={editing ? 'Chi tiết công việc' : 'Giao việc mới'} onClose={() => setModalOpen(false)}>

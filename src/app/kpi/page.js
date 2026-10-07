@@ -8,6 +8,8 @@ import Modal from '@/components/Modal';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Avatar from '@/components/Avatar';
 import { useAuth } from '@/context/AuthContext';
+import usePagedList from '@/lib/usePagedList';
+import LoadMore from '@/components/LoadMore';
 
 const RATING_COLOR = {
   'Xuất sắc': { bg: '#DEE8D5', fg: '#5C7A4F' },
@@ -25,15 +27,13 @@ const DEFAULT_CRITERIA = [
 function KpiContent() {
   const { can } = useAuth();
   const isManager = can('kpi', 'manage');
-  const [evaluations, setEvaluations] = useState([]);
+  const { items: evaluations, hasMore, loadingMore, error: listError, refresh: load, loadMore } = usePagedList('/kpi');
   const [employees, setEmployees] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState({ employee_id: '', period: '', criteria: DEFAULT_CRITERIA, comments: '' });
   const [error, setError] = useState('');
 
-  const load = () => api.get('/kpi').then(({ data }) => setEvaluations(data));
-  useEffect(() => { load(); }, []);
-  useEffect(() => { if (isManager) api.get('/employees').then(({ data }) => setEmployees(data)); }, [isManager]);
+  useEffect(() => { if (isManager) api.get('/employees', { params: { fields: 'options', status: 'active' } }).then(({ data }) => setEmployees(data)); }, [isManager]);
 
   const openCreate = () => {
     setForm({ employee_id: '', period: '', criteria: DEFAULT_CRITERIA.map(c => ({ ...c })), comments: '' });
@@ -81,6 +81,7 @@ function KpiContent() {
         </button>
       )}
     >
+      {listError && <p role="alert" className="mb-4 text-sm text-clay">{listError}</p>}
       <div className="grid gap-3">
         {evaluations.length === 0 && <p className="text-sm text-slate">Chưa có đánh giá KPI nào.</p>}
         {evaluations.map((ev) => {
@@ -118,6 +119,8 @@ function KpiContent() {
           );
         })}
       </div>
+
+      <LoadMore hasMore={hasMore} loading={loadingMore} onClick={loadMore} />
 
       {modalOpen && (
         <Modal title="Tạo đánh giá KPI" onClose={() => setModalOpen(false)} width="max-w-xl">

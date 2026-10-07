@@ -1,7 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { put, del } from '@vercel/blob';
+import { Readable } from 'stream';
+import { put, del, get } from '@vercel/blob';
 
 // Nếu có BLOB_READ_WRITE_TOKEN (tự động có khi bật Vercel Blob trên dự án Vercel),
 // dùng Vercel Blob để lưu file — cần thiết vì Vercel không có ổ đĩa bền vững.
@@ -58,7 +59,7 @@ export async function savePrivateAttachment(file, subdir) {
   const storedName = `${crypto.randomUUID()}${safeExt(file.name)}`;
 
   if (isBlobMode()) {
-    const blob = await put(`${subdir}/${storedName}`, file, { access: 'public', addRandomSuffix: false });
+    const blob = await put(`${subdir}/${storedName}`, file, { access: 'private', addRandomSuffix: false });
     return { storedPath: blob.url, originalName: file.name, mimeType: file.type, size: file.size };
   }
 
@@ -74,16 +75,21 @@ export async function savePrivateAttachment(file, subdir) {
   };
 }
 
-/** Đọc nội dung file đính kèm riêng tư, trả về Buffer hoặc null nếu không tồn tại. */
+/** Stream file after the route has checked the caller's access. */
 export async function readPrivateAttachment(storedPath) {
   if (isRemoteUrl(storedPath)) {
+    if (isBlobMode()) {
+      const blob = await get(storedPath, { access: 'private' }).catch(() => null);
+      if (blob) return blob.stream;
+    }
+    // Existing public blobs remain readable until migrated or deleted.
     const res = await fetch(storedPath);
     if (!res.ok) return null;
-    return Buffer.from(await res.arrayBuffer());
+    return res.body;
   }
   const filePath = path.join(PRIVATE_UPLOAD_ROOT, storedPath);
   if (!fs.existsSync(filePath)) return null;
-  return fs.readFileSync(filePath);
+  return Readable.toWeb(fs.createReadStream(filePath));
 }
 
 export async function deletePrivateAttachment(storedPath) {

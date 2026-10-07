@@ -5,6 +5,8 @@ import { withAuth } from '@/lib/auth';
 export const PUT = withAuth(async (req, { params }, user) => {
   const { id } = await params;
   const { status, feedback } = await req.json();
+  const ownReport = await query('SELECT 1 FROM reports WHERE id = $1 AND employee_id = $2', [id, user.id]);
+  if (ownReport.rowCount) return NextResponse.json({ error: 'Không thể tự duyệt báo cáo của mình' }, { status: 403 });
   if (!['reviewed', 'approved', 'rejected'].includes(status)) {
     return NextResponse.json({ error: 'Trạng thái không hợp lệ' }, { status: 400 });
   }

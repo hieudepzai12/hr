@@ -2,12 +2,16 @@ import jwt from 'jsonwebtoken';
 import { NextResponse } from 'next/server';
 import { ensureSchema, queryOne } from './db';
 import { permissionForRequest } from './permissions';
-import { getRolePermissions } from './role-permissions';
+import { effectivePermissions } from './permissions';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
+function jwtSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (!secret || Buffer.byteLength(secret, 'utf8') < 32) throw new Error('JWT_SECRET must be at least 32 bytes');
+  return secret;
+}
 
 export function signToken(payload) {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+  return jwt.sign(payload, jwtSecret(), { expiresIn: '1d' });
 }
 
 /**
@@ -15,11 +19,10 @@ export function signToken(payload) {
  * Trả về payload nếu hợp lệ, hoặc null nếu không có / không hợp lệ.
  */
 export function getUserFromRequest(req) {
-  const header = req.headers.get('authorization');
-  if (!header || !header.startsWith('Bearer ')) return null;
-  const token = header.split(' ')[1];
+  const token = req.cookies.get('hr_session')?.value;
+  if (!token) return null;
   try {
-    return jwt.verify(token, JWT_SECRET);
+    return jwt.verify(token, jwtSecret());
   } catch {
     return null;
   }
@@ -39,13 +42,26 @@ export function forbidden(message = 'Bạn không có quyền thực hiện thao
  */
 export function withAuth(handler, { roles } = {}) {
   return async (req, ctx) => {
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+      const origin = req.headers.get('origin');
+      if (origin && origin !== new URL(req.url).origin) return forbidden();
+    }
     await ensureSchema();
     const tokenUser = getUserFromRequest(req);
     if (!tokenUser) return unauthorized();
-    const user = await queryOne('SELECT id, email, full_name, role, status, permissions FROM employees WHERE id = $1', [tokenUser.id]);
+    const pathname = new URL(req.url).pathname;
+    const idSegments = pathname.match(/^\/api\/(?:employees|tasks|reports|kpi|departments)\/([^/]+)(?:\/attachments\/([^/]+))?/);
+    if (idSegments && [idSegments[1], idSegments[2]].filter(Boolean).some(value =>
+      !/^[1-9]\d*$/.test(value) || Number(value) > 2147483647)) {
+      return NextResponse.json({ error: 'ID không hợp lệ' }, { status: 400 });
+    }
+    const user = await queryOne(`SELECT e.id, e.email, e.full_name, e.role, e.status, e.department_id,
+      e.token_version, rp.permissions AS role_permissions
+      FROM employees e LEFT JOIN role_permissions rp ON rp.role = e.role WHERE e.id = $1`, [tokenUser.id]);
     if (!user || user.status !== 'active') return unauthorized();
-    user.permissions = await getRolePermissions(user.role);
-    const required = permissionForRequest(new URL(req.url).pathname, req.method);
+    if (tokenUser.ver !== user.token_version) return unauthorized();
+    user.permissions = effectivePermissions(user.role, user.role_permissions);
+    const required = permissionForRequest(pathname, req.method);
     const customManager = user.role.startsWith('custom_') && roles?.includes('manager') &&
       required?.[1] === 'manage' && user.permissions[required[0]]?.manage;
     if (roles && !roles.includes(user.role) && !customManager) return forbidden();

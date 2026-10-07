@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Plus, MessageSquare, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import api from '@/lib/api';
@@ -10,21 +10,30 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import { ReportStatusBadge } from '@/components/Badges';
 import Attachments from '@/components/Attachments';
 import { useAuth } from '@/context/AuthContext';
+import usePagedList from '@/lib/usePagedList';
+import LoadMore from '@/components/LoadMore';
 
 const TYPE_LABEL = { daily: 'Hàng ngày', weekly: 'Hàng tuần', monthly: 'Hàng tháng', project: 'Dự án' };
 
 function ReportsContent() {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const isManager = can('reports', 'manage');
-  const [reports, setReports] = useState([]);
+  const { items: reports, hasMore, loadingMore, error: listError, refresh: load, loadMore } = usePagedList('/reports');
   const [createOpen, setCreateOpen] = useState(false);
   const [detail, setDetail] = useState(null);
   const [form, setForm] = useState({ title: '', content: '', type: 'weekly', period_start: '', period_end: '' });
   const [reviewForm, setReviewForm] = useState({ status: 'approved', feedback: '' });
   const [error, setError] = useState('');
 
-  const load = () => api.get('/reports').then(({ data }) => setReports(data));
-  useEffect(() => { load(); }, []);
+  const openDetail = async (report) => {
+    try {
+      const { data } = await api.get(`/reports/${report.id}`);
+      setDetail(data);
+      setReviewForm({ status: 'approved', feedback: data.feedback || '' });
+    } catch {
+      setError('Không thể tải báo cáo');
+    }
+  };
 
   const submitReport = async (e) => {
     e.preventDefault();
@@ -62,12 +71,13 @@ function ReportsContent() {
         </button>
       }
     >
+      {(error || listError) && <p role="alert" className="mb-4 text-sm text-clay">{error || listError}</p>}
       <div className="grid gap-3">
         {reports.length === 0 && <p className="text-sm text-slate">Chưa có báo cáo nào.</p>}
         {reports.map((r) => (
           <button
             key={r.id}
-            onClick={() => { setDetail(r); setReviewForm({ status: 'approved', feedback: r.feedback || '' }); }}
+            onClick={() => openDetail(r)}
             className="text-left bg-paper-raised rounded-lg border border-line px-5 py-4 hover:border-teal transition-colors focus-ring"
           >
             <div className="flex items-start justify-between gap-3">
@@ -77,7 +87,7 @@ function ReportsContent() {
                   {isManager && <span className="text-xs text-slate">{r.employee_name}</span>}
                 </div>
                 <div className="font-medium text-ink">{r.title}</div>
-                <p className="text-sm text-slate mt-1 line-clamp-2">{r.content}</p>
+                <p className="text-sm text-slate mt-1 line-clamp-2">{r.excerpt}</p>
               </div>
               <div className="flex flex-col items-end gap-2 shrink-0">
                 <ReportStatusBadge status={r.status} />
@@ -87,6 +97,8 @@ function ReportsContent() {
           </button>
         ))}
       </div>
+
+      <LoadMore hasMore={hasMore} loading={loadingMore} onClick={loadMore} />
 
       {createOpen && (
         <Modal title="Gửi báo cáo mới" onClose={() => setCreateOpen(false)}>
@@ -157,7 +169,7 @@ function ReportsContent() {
             </div>
           )}
 
-          {isManager && (
+          {isManager && detail.employee_id !== user.id && (
             <form onSubmit={submitReview} className="mt-5 pt-5 border-t border-line space-y-3">
               <div>
                 <label className="block text-xs font-medium text-ink mb-1">Cập nhật trạng thái</label>

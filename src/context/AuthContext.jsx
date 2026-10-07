@@ -12,22 +12,18 @@ export function AuthProvider({ children }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem('hr_user');
-    if (stored) queueMicrotask(() => setUser(JSON.parse(stored)));
-    if (localStorage.getItem('hr_token')) {
-      api.get('/auth/me').then(({ data }) => {
+    localStorage.removeItem('hr_token');
+    api.get('/auth/me').then(({ data }) => {
         localStorage.setItem('hr_user', JSON.stringify(data));
         setUser(data);
-      }).catch(() => {});
-    }
-    queueMicrotask(() => setReady(true));
+      }).catch(() => { localStorage.removeItem('hr_user'); setUser(null); })
+      .finally(() => setReady(true));
   }, []);
 
   const login = useCallback(async (email, password) => {
     setLoading(true);
     try {
       const { data } = await api.post('/auth/login', { email, password });
-      localStorage.setItem('hr_token', data.token);
       localStorage.setItem('hr_user', JSON.stringify(data.user));
       setUser(data.user);
       return { success: true };
@@ -39,7 +35,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem('hr_token');
+    api.post('/auth/logout').catch(() => {});
     localStorage.removeItem('hr_user');
     setUser(null);
   }, []);

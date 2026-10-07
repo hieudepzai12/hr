@@ -1,18 +1,21 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { withAuth, forbidden } from '@/lib/auth';
+import { validateTaskInput } from '@/lib/validate-task';
 
 export const PUT = withAuth(async (req, { params }, user) => {
   const { id } = await params;
   const task = await queryOne('SELECT * FROM tasks WHERE id = $1', [id]);
   if (!task) return NextResponse.json({ error: 'Không tìm thấy công việc' }, { status: 404 });
-  if (user.role === 'employee' && task.assignee_id !== user.id) {
+  if (!user.permissions.tasks.manage && task.assignee_id !== user.id) {
     return forbidden('Không có quyền chỉnh sửa công việc này');
   }
 
   const isManager = ['admin', 'director', 'manager'].includes(user.role) || user.permissions.tasks.manage;
   if (isManager && !user.permissions.tasks.manage) return forbidden();
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
+  const validationError = validateTaskInput(body, { partial: true });
+  if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
   const { title, description, assignee_id, status, priority, start_date, due_date, progress } = body;
 
   let rows;

@@ -30,7 +30,7 @@ Vercel (và hầu hết nền tảng serverless) chạy code trên các máy ả
 Copy `.env.example` thành `.env.local`, dán `DATABASE_URL` vừa lấy được:
 ```
 DATABASE_URL=postgres://...neon.tech/neondb?sslmode=require
-JWT_SECRET=doi-chuoi-bi-mat-nay
+JWT_SECRET=mot-chuoi-ngau-nhien-it-nhat-32-byte-thay-gia-tri-nay
 ```
 Để trống `BLOB_READ_WRITE_TOKEN` khi chạy local — file upload sẽ tự lưu vào đĩa (`uploads/`, `public/uploads/`).
 
@@ -43,17 +43,21 @@ npm run dev
 
 Lần chạy đầu tiên (khi có người gọi API đầu tiên, ví dụ mở trang đăng nhập) sẽ tự động tạo bảng và seed dữ liệu mẫu trong Postgres.
 
+Các danh sách nhân viên, công việc, báo cáo và KPI tải từng trang 20 mục. API nhận `limit` (1–100) và `offset`; khi dùng hai tham số này, phản hồi có dạng `{ items, hasMore }`. Nội dung đầy đủ của báo cáo được tải qua `/api/reports/{id}` khi mở chi tiết.
+
 > **Không có sẵn Postgres cũng không sao:** bạn cũng có thể chạy Postgres bằng Docker (`docker run -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres`) và dùng `DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable`.
 
 ## Deploy lên Vercel
 
 1. **Đẩy code lên GitHub** (repo riêng hoặc trong tổ chức của bạn).
-2. Vào [vercel.com](https://vercel.com) → **Add New Project** → chọn repo vừa đẩy → Vercel tự nhận diện Next.js, bấm **Deploy**.
-3. **Thêm biến môi trường** trong Vercel Dashboard → Project → Settings → Environment Variables:
+2. **Thêm biến môi trường** trong Vercel Dashboard → Project → Settings → Environment Variables:
    - `DATABASE_URL` = chuỗi kết nối Neon ở bước trên (dùng chung hoặc tạo project Neon riêng cho production)
-   - `JWT_SECRET` = một chuỗi ngẫu nhiên thật, khác với giá trị dev
-4. **Bật Vercel Blob** để lưu file bền vững: vào tab **Storage** của project trên Vercel → **Create Database** → chọn **Blob** → Connect vào project. Vercel sẽ **tự động thêm** biến `BLOB_READ_WRITE_TOKEN` — không cần bạn tự nhập.
-5. Redeploy lại (Vercel → Deployments → nút "Redeploy") để áp dụng biến môi trường mới.
+   - `JWT_SECRET` = chuỗi ngẫu nhiên dài ít nhất 32 byte; bắt buộc ở mọi môi trường
+   - `INITIAL_ADMIN_EMAIL` và `INITIAL_ADMIN_PASSWORD` = tài khoản quản trị đầu tiên khi cơ sở dữ liệu production còn trống (mật khẩu ít nhất 16 ký tự). Sau lần đăng nhập đầu, đổi mật khẩu và xoá hai biến này khỏi cấu hình.
+3. Trên máy triển khai hoặc CI, cấu hình cùng `DATABASE_URL`, `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD` nếu DB mới, rồi chạy `npm run migrate` **trước khi nhận request production**. Lặp lại bước này sau mỗi lần cập nhật schema. Lệnh migration có thể chạy lại an toàn.
+4. Vào [vercel.com](https://vercel.com) → **Add New Project** → chọn repo vừa đẩy → Vercel tự nhận diện Next.js, bấm **Deploy**.
+5. **Bật Vercel Blob** để lưu file bền vững: vào tab **Storage** của project trên Vercel → **Create Database** → chọn **Blob** → Connect vào project. Vercel sẽ **tự động thêm** biến `BLOB_READ_WRITE_TOKEN` — không cần bạn tự nhập.
+6. Redeploy lại (Vercel → Deployments → nút "Redeploy") để áp dụng biến môi trường mới.
 
 Từ giờ, mọi ảnh đại diện và file đính kèm sẽ tự động lưu qua Vercel Blob thay vì đĩa cục bộ — ứng dụng phát hiện `BLOB_READ_WRITE_TOKEN` và chuyển chế độ tự động, không cần sửa code.
 
@@ -80,7 +84,7 @@ hr-nextjs/
         ├── db.js               # Kết nối Postgres, tạo schema, seed dữ liệu mẫu
         ├── auth.js             # Helper xác thực JWT cho API routes
         ├── uploads.js          # Lưu file — tự chuyển giữa đĩa cục bộ và Vercel Blob
-        └── api.js              # Axios client (tự đính token vào header)
+        └── api.js              # Axios client dùng cookie phiên đăng nhập
 ```
 
 ## Tài khoản dùng thử

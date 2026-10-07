@@ -7,10 +7,11 @@ export async function getRolePermissions(role) {
 }
 
 export async function listRoles() {
-  const { rows } = await query("SELECT role, label, permissions FROM role_permissions WHERE label IS NOT NULL ORDER BY label");
-  const builtins = await Promise.all(ROLES.map(async ([role, label]) => ({
-    role, label, permissions: await getRolePermissions(role),
-  })));
+  const { rows } = await query('SELECT role, label, permissions FROM role_permissions ORDER BY label');
+  const byRole = new Map(rows.map(row => [row.role, row]));
+  const builtins = ROLES.map(([role, label]) => ({
+    role, label, permissions: effectivePermissions(role, byRole.get(role)?.permissions),
+  }));
   return [...builtins, ...rows.filter(row => !ROLES.some(([key]) => key === row.role)).map(row => ({
     role: row.role, label: row.label, permissions: effectivePermissions(row.role, row.permissions),
   }))];

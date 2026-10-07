@@ -16,8 +16,8 @@ export const POST = withAuth(async (req, { params }, user) => {
   if (typeof new_password !== 'string' || new_password.length < 8) {
     return NextResponse.json({ error: 'Mật khẩu mới phải có ít nhất 8 ký tự' }, { status: 400 });
   }
-  const hash = bcrypt.hashSync(new_password, 10);
-  const { rowCount } = await query('UPDATE employees SET password_hash = $1 WHERE id = $2', [hash, targetId]);
+  const hash = await bcrypt.hash(new_password, 10);
+  const { rowCount } = await query('UPDATE employees SET password_hash = $1, token_version = token_version + 1 WHERE id = $2', [hash, targetId]);
   if (!rowCount) return NextResponse.json({ error: 'Không tìm thấy tài khoản' }, { status: 404 });
   return NextResponse.json({ success: true });
 }, { roles: ['admin'] });

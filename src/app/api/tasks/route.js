@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { withAuth } from '@/lib/auth';
+import { parsePagination, pagedResult, appendPagination } from '@/lib/pagination';
+import { validateTaskInput } from '@/lib/validate-task';
 
 export const GET = withAuth(async (req, ctx, user) => {
   const { searchParams } = new URL(req.url);
+  const pagination = parsePagination(searchParams);
+  if (pagination === false) return NextResponse.json({ error: 'Phân trang không hợp lệ' }, { status: 400 });
   const assignee_id = searchParams.get('assignee_id');
   const status = searchParams.get('status');
   const priority = searchParams.get('priority');
@@ -18,7 +22,7 @@ export const GET = withAuth(async (req, ctx, user) => {
              WHERE 1=1`;
   const params = [];
 
-  if (!['admin', 'director', 'manager'].includes(user.role) && !user.permissions.tasks.manage) {
+  if (!user.permissions.tasks.manage) {
     params.push(user.id);
     sql += ` AND t.assignee_id = $${params.length}`;
   } else if (assignee_id) {
@@ -29,15 +33,17 @@ export const GET = withAuth(async (req, ctx, user) => {
   if (priority) { params.push(priority); sql += ` AND t.priority = $${params.length}`; }
   if (from) { params.push(from); sql += ` AND t.due_date >= $${params.length}`; }
   if (to) { params.push(to); sql += ` AND t.due_date <= $${params.length}`; }
-  sql += ' ORDER BY t.due_date ASC';
+  sql = appendPagination(sql + ' ORDER BY t.due_date ASC, t.id ASC', params, pagination);
 
   const { rows } = await query(sql, params);
-  return NextResponse.json(rows);
+  return NextResponse.json(pagedResult(rows, pagination));
 });
 
 export const POST = withAuth(async (req, ctx, user) => {
-  const { title, description, assignee_id, status, priority, start_date, due_date, progress } = await req.json();
-  if (!title || !due_date) return NextResponse.json({ error: 'Thiếu tiêu đề hoặc hạn chót' }, { status: 400 });
+  const body = await req.json().catch(() => null);
+  const validationError = validateTaskInput(body);
+  if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
+  const { title, description, assignee_id, status, priority, start_date, due_date, progress } = body;
   const { rows } = await query(
     `INSERT INTO tasks (title, description, assignee_id, created_by, status, priority, start_date, due_date, progress)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,

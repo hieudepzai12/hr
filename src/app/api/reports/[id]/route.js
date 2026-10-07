@@ -3,7 +3,7 @@ import { query, queryOne } from '@/lib/db';
 import { withAuth, forbidden } from '@/lib/auth';
 
 function canAccessReport(report, user) {
-  if (['admin', 'director', 'manager'].includes(user.role) || user.permissions.reports.manage) return true;
+  if (user.permissions.reports.manage) return true;
   return report.employee_id === user.id;
 }
 

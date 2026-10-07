@@ -4,7 +4,7 @@ import { withAuth, forbidden } from '@/lib/auth';
 import { readPrivateAttachment, deletePrivateAttachment } from '@/lib/uploads';
 
 function canAccessTask(task, user) {
-  if (['admin', 'director', 'manager'].includes(user.role)) return true;
+  if (user.permissions.tasks.manage) return true;
   return task.assignee_id === user.id;
 }
 
@@ -20,13 +20,15 @@ export const GET = withAuth(async (req, { params }, user) => {
   );
   if (!att) return NextResponse.json({ error: 'Không tìm thấy file' }, { status: 404 });
 
-  const buffer = await readPrivateAttachment(att.stored_path);
-  if (!buffer) return NextResponse.json({ error: 'File không tồn tại trên máy chủ' }, { status: 404 });
+  const stream = await readPrivateAttachment(att.stored_path);
+  if (!stream) return NextResponse.json({ error: 'File không tồn tại trên máy chủ' }, { status: 404 });
 
-  return new NextResponse(buffer, {
+  return new NextResponse(stream, {
     headers: {
       'Content-Type': att.mime_type || 'application/octet-stream',
-      'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(att.original_name)}`,
+      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(att.original_name)}`,
+      'Content-Length': String(att.size),
+      'X-Content-Type-Options': 'nosniff',
     },
   });
 });

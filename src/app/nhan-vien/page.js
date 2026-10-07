@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Plus, Search, Pencil, UserX, Camera, Loader2, KeyRound } from 'lucide-react';
 import api from '@/lib/api';
 import Layout from '@/components/Layout';
@@ -8,17 +8,19 @@ import Modal from '@/components/Modal';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Avatar from '@/components/Avatar';
 import { useAuth } from '@/context/AuthContext';
+import usePagedList from '@/lib/usePagedList';
+import LoadMore from '@/components/LoadMore';
 
 const ROLE_LABEL = { admin: 'Quản trị viên', director: 'Giám đốc', manager: 'Quản lý', employee: 'Nhân viên' };
 
 function EmployeesContent() {
   const { can, user } = useAuth();
   const isManager = can('employees', 'manage');
-  const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [roles, setRoles] = useState([]);
   const [managerOptions, setManagerOptions] = useState([]);
   const [search, setSearch] = useState('');
+  const { items: employees, hasMore, loadingMore, error: listError, refresh: load, loadMore } = usePagedList('/employees', { search: search || undefined });
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({});
@@ -31,15 +33,10 @@ function EmployeesContent() {
   const [notice, setNotice] = useState('');
   const avatarFileRef = useRef(null);
 
-  const load = useCallback(() => {
-    api.get('/employees', { params: { search: search || undefined } }).then(({ data }) => setEmployees(data));
-  }, [search]);
-
-  useEffect(() => { load(); }, [load]);
   useEffect(() => { api.get('/departments').then(({ data }) => setDepartments(data)); }, []);
   useEffect(() => { api.get('/roles').then(({ data }) => setRoles(data)); }, []);
   useEffect(() => {
-    api.get('/employees', { params: { status: 'active' } }).then(({ data }) => setManagerOptions(data));
+    api.get('/employees', { params: { status: 'active', fields: 'options' } }).then(({ data }) => setManagerOptions(data));
   }, []);
 
   const openCreate = () => {
@@ -102,7 +99,7 @@ function EmployeesContent() {
       }
       setModalOpen(false);
       load();
-      api.get('/employees', { params: { status: 'active' } }).then(({ data }) => setManagerOptions(data));
+      api.get('/employees', { params: { status: 'active', fields: 'options' } }).then(({ data }) => setManagerOptions(data));
     } catch (err) {
       setError(err.response?.data?.error || 'Có lỗi xảy ra');
     }
@@ -113,7 +110,7 @@ function EmployeesContent() {
     try {
       await api.delete(`/employees/${id}`);
       load();
-      api.get('/employees', { params: { status: 'active' } }).then(({ data }) => setManagerOptions(data));
+      api.get('/employees', { params: { status: 'active', fields: 'options' } }).then(({ data }) => setManagerOptions(data));
     } catch (err) {
       setError(err.response?.data?.error || 'Không thể vô hiệu hóa tài khoản.');
     }
@@ -140,12 +137,13 @@ function EmployeesContent() {
   return (
     <Layout
       title="Nhân viên"
-      subtitle={`${employees.length} nhân viên`}
+      subtitle={`${employees.length} nhân viên đã tải${hasMore ? ' · còn thêm' : ''}`}
       actions={isManager && <button onClick={openCreate} className="flex items-center gap-1.5 bg-teal hover:bg-teal-dark text-white text-sm font-medium px-4 py-2 rounded-md transition-colors focus-ring">
           <Plus size={16} /> Thêm nhân viên
         </button>}
     >
       {!modalOpen && error && <div role="alert" className="mb-4 text-sm text-clay bg-[#F1DAD5] px-3 py-2 rounded-md">{error}</div>}
+      {listError && <div role="alert" className="mb-4 text-sm text-clay bg-[#F1DAD5] px-3 py-2 rounded-md">{listError}</div>}
       {notice && <div role="status" className="mb-4 text-sm text-teal bg-[#DEE8D5] px-3 py-2 rounded-md">{notice}</div>}
       <div className="relative mb-5 max-w-sm">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate" />
@@ -209,6 +207,8 @@ function EmployeesContent() {
           </tbody>
         </table>
       </div>
+
+      <LoadMore hasMore={hasMore} loading={loadingMore} onClick={loadMore} />
 
       {modalOpen && (
         <Modal title={editing ? 'Chỉnh sửa nhân viên' : 'Thêm nhân viên'} onClose={() => setModalOpen(false)}>

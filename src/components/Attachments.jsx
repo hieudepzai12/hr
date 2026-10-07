@@ -29,7 +29,15 @@ export default function Attachments({ kind, entityId, canManage = true }) {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { if (entityId) load(); }, [entityId, kind]);
+  useEffect(() => {
+    if (!entityId) return;
+    let active = true;
+    api.get(`/${kind}/${entityId}/attachments`)
+      .then(({ data }) => { if (active) setFiles(data); })
+      .catch(() => { if (active) setError('Không thể tải danh sách file'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [entityId, kind]);
 
   const handleUpload = async (e) => {
     const selected = Array.from(e.target.files || []);

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { queryOne } from '@/lib/db';
 import { withAuth } from '@/lib/auth';
-import { getRolePermissions, getRoleLabel } from '@/lib/role-permissions';
+import { getRoleLabel } from '@/lib/role-permissions';
 
 export const GET = withAuth(async (req, ctx, user) => {
   const emp = await queryOne(`
@@ -9,6 +9,6 @@ export const GET = withAuth(async (req, ctx, user) => {
     LEFT JOIN departments d ON e.department_id = d.id
     WHERE e.id = $1`, [user.id]);
   if (!emp) return NextResponse.json({ error: 'Không tìm thấy người dùng' }, { status: 404 });
-  const { password_hash, ...safeEmp } = emp;
-  return NextResponse.json({ ...safeEmp, role_label: await getRoleLabel(safeEmp.role), permissions: await getRolePermissions(safeEmp.role) });
+  const { password_hash, token_version, ...safeEmp } = emp;
+  return NextResponse.json({ ...safeEmp, role_label: await getRoleLabel(safeEmp.role), permissions: user.permissions });
 });

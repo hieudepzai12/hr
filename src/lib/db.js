@@ -16,17 +16,25 @@ function createPool() {
   return new Pool({
     connectionString,
     // Hầu hết nhà cung cấp Postgres serverless (Neon, Vercel Postgres, Supabase...) yêu cầu SSL.
-    ssl: connectionString.includes('sslmode=disable') ? false : { rejectUnauthorized: false },
+    ssl: connectionString.includes('sslmode=disable') ? false : { rejectUnauthorized: true },
     max: process.env.VERCEL ? 1 : 10, // serverless: mỗi instance chỉ nên giữ 1 kết nối
   });
 }
 
-const pool = globalForDb.__hrPgPool || createPool();
-if (process.env.NODE_ENV !== 'production') globalForDb.__hrPgPool = pool;
+const previousPool = globalForDb.__hrPgPool;
+const pool = previousPool && !previousPool.ending && globalForDb.__hrPgPoolUrl === process.env.DATABASE_URL ? previousPool : createPool();
+if (process.env.NODE_ENV !== 'production') {
+  globalForDb.__hrPgPool = pool;
+  globalForDb.__hrPgPoolUrl = process.env.DATABASE_URL;
+}
 
 /** Chạy một câu truy vấn SQL, trả về { rows, rowCount } giống pg gốc. */
 export function query(text, params) {
   return pool.query(text, params);
+}
+
+export function closeDb() {
+  return pool.end();
 }
 
 /** Lấy dòng đầu tiên, hoặc null nếu không có kết quả. */
@@ -39,11 +47,22 @@ let schemaReadyPromise = null;
 
 /** Đảm bảo bảng đã được tạo & seed dữ liệu mẫu. Gọi an toàn nhiều lần — chỉ chạy thật sự một lần. */
 export function ensureSchema() {
-  if (!schemaReadyPromise) schemaReadyPromise = initSchema();
+  if (!schemaReadyPromise) schemaReadyPromise = (process.env.NODE_ENV === 'production' ? verifySchema() : migrateSchema()).catch((error) => {
+    schemaReadyPromise = null;
+    throw error;
+  });
   return schemaReadyPromise;
 }
 
-async function initSchema() {
+async function verifySchema() {
+  try {
+    await pool.query('SELECT token_version FROM employees LIMIT 0');
+  } catch {
+    throw new Error('Database schema is not ready. Run npm run migrate before starting production.');
+  }
+}
+
+export async function migrateSchema() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS departments (
       id SERIAL PRIMARY KEY,
@@ -67,6 +86,7 @@ async function initSchema() {
       avatar_color TEXT DEFAULT '#2C5F5D',
       avatar_path TEXT,
       permissions JSONB NOT NULL DEFAULT '{}'::jsonb,
+      token_version INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
@@ -129,27 +149,59 @@ async function initSchema() {
       uploaded_by INTEGER REFERENCES employees(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS login_attempts (
+      key TEXT PRIMARY KEY,
+      failures INTEGER NOT NULL DEFAULT 0,
+      window_started_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
 
   // Postgres >= 9.6 hỗ trợ IF NOT EXISTS cho ADD COLUMN — an toàn khi chạy lại nhiều lần.
   await pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS avatar_path TEXT');
-  const { rows: managerColumns } = await pool.query("SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'employees' AND column_name = 'manager_id'");
   await pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS manager_id INTEGER REFERENCES employees(id) ON DELETE SET NULL');
-  if (!managerColumns.length) {
-    await pool.query(`UPDATE employees AS staff SET manager_id = lead.id
+  await pool.query(`UPDATE employees AS staff SET manager_id = lead.id
       FROM employees AS lead
       WHERE lead.email = 'manager@company.vn' AND lead.role = 'manager' AND lead.status = 'active'
         AND staff.email IN ('binh@company.vn', 'ha@company.vn')
         AND staff.role = 'employee' AND staff.department_id = lead.department_id
         AND staff.manager_id IS NULL`);
-  }
   await pool.query("ALTER TABLE employees ADD COLUMN IF NOT EXISTS permissions JSONB NOT NULL DEFAULT '{}'::jsonb");
+  await pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0');
   await pool.query('ALTER TABLE role_permissions ADD COLUMN IF NOT EXISTS label TEXT');
   await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS role_permissions_label_unique ON role_permissions (LOWER(label)) WHERE label IS NOT NULL');
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS employees_department_idx ON employees (department_id);
+    CREATE INDEX IF NOT EXISTS employees_name_id_idx ON employees (full_name, id);
+    CREATE INDEX IF NOT EXISTS employees_manager_idx ON employees (manager_id);
+    CREATE INDEX IF NOT EXISTS tasks_assignee_idx ON tasks (assignee_id);
+    CREATE INDEX IF NOT EXISTS tasks_due_date_idx ON tasks (due_date);
+    CREATE INDEX IF NOT EXISTS tasks_due_date_id_idx ON tasks (due_date, id);
+    CREATE INDEX IF NOT EXISTS tasks_status_idx ON tasks (status);
+    CREATE INDEX IF NOT EXISTS reports_employee_idx ON reports (employee_id);
+    CREATE INDEX IF NOT EXISTS reports_status_idx ON reports (status);
+    CREATE INDEX IF NOT EXISTS reports_created_at_idx ON reports (created_at DESC);
+    CREATE INDEX IF NOT EXISTS reports_created_at_id_idx ON reports (created_at DESC, id DESC);
+    CREATE INDEX IF NOT EXISTS kpi_employee_idx ON kpi_evaluations (employee_id);
+    CREATE INDEX IF NOT EXISTS kpi_period_idx ON kpi_evaluations (period);
+    CREATE INDEX IF NOT EXISTS kpi_created_at_id_idx ON kpi_evaluations (created_at DESC, id DESC);
+    CREATE INDEX IF NOT EXISTS attachments_entity_idx ON attachments (entity_type, entity_id);
+  `);
 
   const { rows } = await pool.query('SELECT COUNT(*)::int AS c FROM employees');
   if (rows[0].c === 0) {
-    await seed();
+    if (process.env.NODE_ENV === 'production' || process.env.MIGRATION_MODE === '1') {
+      const email = process.env.INITIAL_ADMIN_EMAIL?.trim().toLowerCase();
+      const password = process.env.INITIAL_ADMIN_PASSWORD;
+      if (!email || typeof password !== 'string' || password.length < 16) {
+        throw new Error('Set INITIAL_ADMIN_EMAIL and INITIAL_ADMIN_PASSWORD (at least 16 characters) before first production login');
+      }
+      const hash = await bcrypt.hash(password, 12);
+      await pool.query(`INSERT INTO employees (full_name, email, password_hash, role)
+        VALUES ('Quản trị viên', $1, $2, 'admin') ON CONFLICT (email) DO NOTHING`, [email, hash]);
+    } else {
+      await seed();
+    }
   }
 }
 
