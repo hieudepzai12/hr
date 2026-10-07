@@ -53,8 +53,8 @@ Các danh sách nhân viên, công việc, báo cáo và KPI tải từng trang 
 2. **Thêm biến môi trường** trong Vercel Dashboard → Project → Settings → Environment Variables:
    - `DATABASE_URL` = chuỗi kết nối Neon ở bước trên (dùng chung hoặc tạo project Neon riêng cho production)
    - `JWT_SECRET` = chuỗi ngẫu nhiên dài ít nhất 32 byte; bắt buộc ở mọi môi trường
-   - `INITIAL_ADMIN_EMAIL` và `INITIAL_ADMIN_PASSWORD` = tài khoản quản trị đầu tiên khi cơ sở dữ liệu production còn trống (mật khẩu ít nhất 16 ký tự). Sau lần đăng nhập đầu, đổi mật khẩu và xoá hai biến này khỏi cấu hình.
-3. Trên máy triển khai hoặc CI, cấu hình cùng `DATABASE_URL`, `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD` nếu DB mới, rồi chạy `npm run migrate` **trước khi nhận request production**. Lặp lại bước này sau mỗi lần cập nhật schema. Lệnh migration có thể chạy lại an toàn.
+   - `INITIAL_ADMIN_EMAIL` và `INITIAL_ADMIN_PASSWORD` = tài khoản quản trị đầu tiên khi cơ sở dữ liệu production còn trống (mật khẩu ít nhất 16 ký tự). Nếu production đang có tài khoản demo `admin@company.vn / admin123`, ứng dụng tự thay mật khẩu demo bằng `INITIAL_ADMIN_PASSWORD` trong lần chạy đầu sau khi cập nhật. Đăng nhập bằng mật khẩu mới rồi xoá biến mật khẩu này khỏi cấu hình.
+3. Trên máy triển khai hoặc CI, cấu hình cùng `DATABASE_URL`, `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD` nếu DB mới, rồi chạy `npm run migrate` **trước khi nhận request production**. Lệnh migration có thể chạy lại an toàn. Nếu chưa chạy, ứng dụng sẽ tự chạy một lần khi phát hiện schema còn thiếu; bước này có thể làm request đầu tiên chậm hơn.
 4. Vào [vercel.com](https://vercel.com) → **Add New Project** → chọn repo vừa đẩy → Vercel tự nhận diện Next.js, bấm **Deploy**.
 5. **Bật Vercel Blob** để lưu file bền vững: vào tab **Storage** của project trên Vercel → **Create Database** → chọn **Blob** → Connect vào project. Vercel sẽ **tự động thêm** biến `BLOB_READ_WRITE_TOKEN` — không cần bạn tự nhập.
 6. Redeploy lại (Vercel → Deployments → nút "Redeploy") để áp dụng biến môi trường mới.

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { query, queryOne, ensureSchema } from '@/lib/db';
-import { signToken, isTrustedOrigin } from '@/lib/auth';
+import { signToken, isTrustedOrigin, assertAuthConfigured } from '@/lib/auth';
 import { getRolePermissions, getRoleLabel } from '@/lib/role-permissions';
 
 const DUMMY_HASH = '$2b$10$PTK.4EqqTxRJ6GZObMpBKOb83AUs9xhUizQjXjQsCCZ3u.dSxgJte';
@@ -23,7 +23,23 @@ async function recordFailure(key) {
 }
 
 export async function POST(req) {
+  try {
+    return await login(req);
+  } catch (error) {
+    const safeMessage = String(error.message || '').replace(/postgres(?:ql)?:\/\/\S+/gi, '[database URL hidden]');
+    console.error('Login infrastructure error', { code: error.code, message: safeMessage });
+    const message = error.code === 'AUTH_CONFIG'
+      ? 'Hệ thống đăng nhập chưa được cấu hình. Vui lòng liên hệ quản trị.'
+      : error.code === 'ADMIN_SETUP'
+        ? 'Tài khoản quản trị cần đổi mật khẩu dùng thử trước khi đăng nhập.'
+        : 'Không thể kết nối cơ sở dữ liệu. Vui lòng liên hệ quản trị.';
+    return NextResponse.json({ error: message }, { status: 503 });
+  }
+}
+
+async function login(req) {
   if (!isTrustedOrigin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  assertAuthConfigured();
   await ensureSchema();
   const body = await req.json().catch(() => null);
   const { email, password } = body || {};

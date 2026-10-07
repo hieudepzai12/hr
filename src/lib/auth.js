@@ -4,14 +4,18 @@ import { ensureSchema, queryOne } from './db';
 import { permissionForRequest } from './permissions';
 import { effectivePermissions } from './permissions';
 
-function jwtSecret() {
+export function assertAuthConfigured() {
   const secret = process.env.JWT_SECRET;
-  if (!secret || Buffer.byteLength(secret, 'utf8') < 32) throw new Error('JWT_SECRET must be at least 32 bytes');
+  if (!secret || Buffer.byteLength(secret, 'utf8') < 32) {
+    const error = new Error('JWT_SECRET must be set to at least 32 bytes in this deployment');
+    error.code = 'AUTH_CONFIG';
+    throw error;
+  }
   return secret;
 }
 
 export function signToken(payload) {
-  return jwt.sign(payload, jwtSecret(), { expiresIn: '1d' });
+  return jwt.sign(payload, assertAuthConfigured(), { expiresIn: '1d' });
 }
 
 /**
@@ -21,8 +25,9 @@ export function signToken(payload) {
 export function getUserFromRequest(req) {
   const token = req.cookies.get('hr_session')?.value;
   if (!token) return null;
+  const secret = assertAuthConfigured();
   try {
-    return jwt.verify(token, jwtSecret());
+    return jwt.verify(token, secret);
   } catch {
     return null;
   }

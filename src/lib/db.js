@@ -24,6 +24,7 @@ function createPool() {
     connectionString,
     // Hầu hết nhà cung cấp Postgres serverless (Neon, Vercel Postgres, Supabase...) yêu cầu SSL.
     ssl: connectionString.includes('sslmode=disable') ? false : { rejectUnauthorized: true },
+    connectionTimeoutMillis: 15000,
     max: process.env.VERCEL ? 1 : 10, // serverless: mỗi instance chỉ nên giữ 1 kết nối
   });
 }
@@ -66,26 +67,51 @@ export async function queryOne(text, params) {
 }
 
 let schemaReadyPromise = null;
+const SCHEMA_VERSION = 1;
 
 /** Đảm bảo bảng đã được tạo & seed dữ liệu mẫu. Gọi an toàn nhiều lần — chỉ chạy thật sự một lần. */
 export function ensureSchema() {
-  if (!schemaReadyPromise) schemaReadyPromise = (process.env.NODE_ENV === 'production' ? verifySchema() : migrateSchema()).catch((error) => {
+  if (!schemaReadyPromise) schemaReadyPromise = (process.env.NODE_ENV === 'production'
+    ? verifySchema().then(rotateDemoAdminPassword)
+    : migrateSchema()).catch((error) => {
     schemaReadyPromise = null;
     throw error;
   });
   return schemaReadyPromise;
 }
 
+async function rotateDemoAdminPassword() {
+  const { rows } = await pool.query("SELECT id, password_hash FROM employees WHERE email = 'admin@company.vn' AND role = 'admin'");
+  const admin = rows[0];
+  if (!admin || !await bcrypt.compare('admin123', admin.password_hash)) return;
+  const password = process.env.INITIAL_ADMIN_PASSWORD;
+  if (typeof password !== 'string' || password.length < 16 || password === 'admin123') {
+    const error = new Error('Set INITIAL_ADMIN_PASSWORD to a unique password of at least 16 characters to replace the public demo admin password');
+    error.code = 'ADMIN_SETUP';
+    throw error;
+  }
+  const hash = await bcrypt.hash(password, 12);
+  await pool.query('UPDATE employees SET password_hash = $1, token_version = token_version + 1 WHERE id = $2 AND password_hash = $3',
+    [hash, admin.id, admin.password_hash]);
+}
+
 async function verifySchema() {
   try {
-    await pool.query('SELECT token_version FROM employees LIMIT 0');
-  } catch {
-    throw new Error('Database schema is not ready. Run npm run migrate before starting production.');
+    const { rows } = await pool.query('SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1');
+    if (rows[0]?.version >= SCHEMA_VERSION) return;
+  } catch (error) {
+    if (error.code !== '42P01') throw error;
   }
+  await migrateSchema();
 }
 
 export async function migrateSchema() {
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      version INTEGER PRIMARY KEY,
+      applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS departments (
       id SERIAL PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,
@@ -225,6 +251,7 @@ export async function migrateSchema() {
       await seed();
     }
   }
+  await pool.query('INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT (version) DO NOTHING', [SCHEMA_VERSION]);
 }
 
 async function seed() {
