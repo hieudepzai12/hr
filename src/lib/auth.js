@@ -36,6 +36,29 @@ export function forbidden(message = 'Bạn không có quyền thực hiện thao
   return NextResponse.json({ error: message }, { status: 403 });
 }
 
+export function isTrustedOrigin(req) {
+  const origin = req.headers.get('origin');
+  if (!origin) return true;
+  const requestOrigin = new URL(req.url).origin;
+  if (origin === requestOrigin) return true;
+
+  const configuredOrigins = [
+    process.env.BETTER_AUTH_URL,
+    process.env.V0_RUNTIME_URL,
+    process.env.V0_DEV_APP_URL,
+    process.env.V0_BUILD_URL,
+    process.env.V0_SANDBOX_URL,
+  ].filter(Boolean).map((value) => {
+    try { return new URL(value.includes('://') ? value : `https://${value}`).origin; } catch { return null; }
+  }).filter(Boolean);
+
+  const vercelOrigins = [process.env.VERCEL_URL, process.env.VERCEL_PROJECT_PRODUCTION_URL]
+    .filter(Boolean)
+    .map((value) => `https://${value.replace(/^https?:\/\//, '')}`);
+
+  return [...configuredOrigins, ...vercelOrigins].includes(origin);
+}
+
 /**
  * Bọc một route handler, yêu cầu người dùng đã đăng nhập.
  * handler nhận (req, ctx, user)
@@ -43,8 +66,7 @@ export function forbidden(message = 'Bạn không có quyền thực hiện thao
 export function withAuth(handler, { roles } = {}) {
   return async (req, ctx) => {
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
-      const origin = req.headers.get('origin');
-      if (origin && origin !== new URL(req.url).origin) return forbidden();
+      if (!isTrustedOrigin(req)) return forbidden();
     }
     await ensureSchema();
     const tokenUser = getUserFromRequest(req);
