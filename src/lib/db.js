@@ -5,8 +5,15 @@ import bcrypt from 'bcryptjs';
 // (dev) hoặc khi nhiều serverless function invocations dùng chung module (Vercel).
 const globalForDb = globalThis;
 
+function getConnectionString() {
+  return process.env.DATABASE_URL ||
+    process.env.POSTGRES_PRISMA_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.POSTGRES_URL_NON_POOLING;
+}
+
 function createPool() {
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString = getConnectionString();
   if (!connectionString) {
     throw new Error(
       'Thiếu biến môi trường DATABASE_URL. Tạo database Postgres (khuyến nghị: neon.tech, miễn phí) ' +
@@ -21,11 +28,12 @@ function createPool() {
   });
 }
 
+const connectionString = getConnectionString();
 const previousPool = globalForDb.__hrPgPool;
-const pool = previousPool && !previousPool.ending && globalForDb.__hrPgPoolUrl === process.env.DATABASE_URL ? previousPool : createPool();
+const pool = previousPool && !previousPool.ending && globalForDb.__hrPgPoolUrl === connectionString ? previousPool : createPool();
 if (process.env.NODE_ENV !== 'production') {
   globalForDb.__hrPgPool = pool;
-  globalForDb.__hrPgPoolUrl = process.env.DATABASE_URL;
+  globalForDb.__hrPgPoolUrl = connectionString;
 }
 
 /** Chạy một câu truy vấn SQL, trả về { rows, rowCount } giống pg gốc. */
