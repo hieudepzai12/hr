@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { query, queryOne, ensureSchema } from '@/lib/db';
-import { signToken } from '@/lib/auth';
+import { signToken, isTrustedOrigin } from '@/lib/auth';
 import { getRolePermissions, getRoleLabel } from '@/lib/role-permissions';
 
 const DUMMY_HASH = '$2b$10$PTK.4EqqTxRJ6GZObMpBKOb83AUs9xhUizQjXjQsCCZ3u.dSxgJte';
@@ -23,8 +23,7 @@ async function recordFailure(key) {
 }
 
 export async function POST(req) {
-  const origin = req.headers.get('origin');
-  if (origin && origin !== new URL(req.url).origin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!isTrustedOrigin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   await ensureSchema();
   const body = await req.json().catch(() => null);
   const { email, password } = body || {};

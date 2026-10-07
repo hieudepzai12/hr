@@ -28,13 +28,27 @@ function createPool() {
   });
 }
 
-const connectionString = getConnectionString();
-const previousPool = globalForDb.__hrPgPool;
-const pool = previousPool && !previousPool.ending && globalForDb.__hrPgPoolUrl === connectionString ? previousPool : createPool();
-if (process.env.NODE_ENV !== 'production') {
-  globalForDb.__hrPgPool = pool;
-  globalForDb.__hrPgPoolUrl = connectionString;
+let activePool;
+function getPool() {
+  if (activePool) return activePool;
+  const connectionString = getConnectionString();
+  const previousPool = globalForDb.__hrPgPool;
+  activePool = previousPool && !previousPool.ending && globalForDb.__hrPgPoolUrl === connectionString
+    ? previousPool
+    : createPool();
+  if (process.env.NODE_ENV !== 'production') {
+    globalForDb.__hrPgPool = activePool;
+    globalForDb.__hrPgPoolUrl = connectionString;
+  }
+  return activePool;
 }
+
+const pool = new Proxy({}, {
+  get(_target, property) {
+    const value = getPool()[property];
+    return typeof value === 'function' ? value.bind(getPool()) : value;
+  },
+});
 
 /** Chạy một câu truy vấn SQL, trả về { rows, rowCount } giống pg gốc. */
 export function query(text, params) {
