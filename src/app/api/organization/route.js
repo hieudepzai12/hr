@@ -6,7 +6,7 @@ export const GET = withAuth(async (req, ctx, user) => {
   const companyWide = user.permissions.organization.scope === 'full';
   const params = companyWide ? [] : [user.id];
   const departmentFilter = companyWide ? '' : 'WHERE d.id = (SELECT department_id FROM employees WHERE id = $1)';
-  const employeeFilter = companyWide ? '' : 'AND e.department_id = (SELECT department_id FROM employees WHERE id = $1)';
+  const employeeFilter = companyWide ? '' : "AND (e.department_id = (SELECT department_id FROM employees WHERE id = $1) OR e.role = 'director')";
   const [departmentResult, employeeResult] = await Promise.all([
     query(`SELECT d.id, d.name FROM departments d ${departmentFilter} ORDER BY d.name`, params),
     query(`SELECT e.id, e.full_name, e.role, e.position, e.department_id, e.manager_id,
