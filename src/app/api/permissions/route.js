@@ -41,20 +41,18 @@ export const PUT = withAuth(async (req) => {
       permissions.organization.manage) {
     return NextResponse.json({ error: 'Bộ quyền không hợp lệ' }, { status: 400 });
   }
-  const custom = role.startsWith('custom_');
   const name = typeof label === 'string' ? label.trim().replace(/\s+/g, ' ') : null;
-  if (label !== undefined && (!custom || !name || name.length < 2 || name.length > 60)) {
+  if (label !== undefined && (!name || name.length < 2 || name.length > 60)) {
     return NextResponse.json({ error: 'Tên bộ quyền không hợp lệ' }, { status: 400 });
   }
+  if (name && (await listRoles()).some((item) => item.role !== role && item.label.toLocaleLowerCase('vi') === name.toLocaleLowerCase('vi'))) {
+    return NextResponse.json({ error: 'Tên bộ quyền đã tồn tại' }, { status: 409 });
+  }
   try {
-    if (custom) {
-      await query('UPDATE role_permissions SET label = COALESCE($2, label), permissions = $3::jsonb, updated_at = NOW() WHERE role = $1',
-        [role, name, JSON.stringify(permissions)]);
-    } else {
-      await query(`INSERT INTO role_permissions (role, permissions) VALUES ($1, $2::jsonb)
-        ON CONFLICT (role) DO UPDATE SET permissions = EXCLUDED.permissions, updated_at = NOW()`,
-      [role, JSON.stringify(permissions)]);
-    }
+    await query(`INSERT INTO role_permissions (role, label, permissions) VALUES ($1, $2, $3::jsonb)
+      ON CONFLICT (role) DO UPDATE SET label = COALESCE(EXCLUDED.label, role_permissions.label),
+        permissions = EXCLUDED.permissions, updated_at = NOW()`,
+      [role, name, JSON.stringify(permissions)]);
   } catch (error) {
     if (error.code === '23505') return NextResponse.json({ error: 'Tên bộ quyền đã tồn tại' }, { status: 409 });
     throw error;
@@ -65,13 +63,19 @@ export const PUT = withAuth(async (req) => {
 
 export const DELETE = withAuth(async (req) => {
   const { role } = await req.json();
-  if (typeof role !== 'string' || !role.startsWith('custom_')) {
-    return NextResponse.json({ error: 'Chỉ có thể xóa bộ quyền tự tạo' }, { status: 400 });
+  if (typeof role !== 'string' || role === 'admin' || !await roleExists(role)) {
+    return NextResponse.json({ error: 'Không thể xóa bộ quyền này' }, { status: 400 });
   }
-  const { rows } = await query(`DELETE FROM role_permissions
-    WHERE role = $1 AND label IS NOT NULL
-      AND NOT EXISTS (SELECT 1 FROM employees WHERE role = $1)
-    RETURNING role`, [role]);
+  const builtin = ['director', 'manager', 'employee'].includes(role);
+  const sql = builtin
+    ? `INSERT INTO role_permissions (role, is_deleted) SELECT $1, true
+        WHERE NOT EXISTS (SELECT 1 FROM employees WHERE role = $1)
+        ON CONFLICT (role) DO UPDATE SET is_deleted = true, label = NULL, updated_at = NOW()
+        WHERE NOT EXISTS (SELECT 1 FROM employees WHERE role = $1)
+        RETURNING role`
+    : `DELETE FROM role_permissions WHERE role = $1 AND label IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM employees WHERE role = $1) RETURNING role`;
+  const { rows } = await query(sql, [role]);
   if (!rows[0]) {
     const existing = await roleExists(role);
     return NextResponse.json({ error: existing ? 'Bộ quyền đang được gán cho nhân viên. Hãy đổi vai trò của họ trước khi xóa.' : 'Không tìm thấy bộ quyền' },

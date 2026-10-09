@@ -27,7 +27,11 @@ function Content() {
     if (user?.role !== 'admin') return;
     api.get('/permissions').then(({ data }) => {
       setRoles(data);
-      setDraft(structuredClone(data.find((item) => item.role === 'manager')?.permissions || {}));
+      const initial = data.find((item) => item.role === 'manager') || data.find((item) => item.role !== 'admin') || data[0];
+      if (initial) {
+        setRole(initial.role);
+        setDraft(structuredClone(initial.permissions));
+      }
     }).catch(() => setMessage('Không tải được bộ quyền.'));
   }, [user?.role]);
   const selected = roles.find((item) => item.role === role);
@@ -76,7 +80,7 @@ function Content() {
     try {
       await api.delete('/permissions', { data: { role } });
       setRoles((current) => current.filter((item) => item.role !== role));
-      const fallback = roles.find((item) => item.role === 'manager');
+      const fallback = roles.find((item) => item.role !== role && item.role !== 'admin') || roles.find((item) => item.role === 'admin');
       setRole(fallback.role);
       setDraft(structuredClone(fallback.permissions));
       setDeleteOpen(false);
@@ -97,7 +101,7 @@ function Content() {
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div><h2 className="font-semibold">{selected.label}</h2><p className="text-xs text-slate">Thay đổi áp dụng cho tất cả tài khoản mang vai trò này ngay sau khi lưu.</p></div>
             <div className="flex items-center gap-2">
-              {role.startsWith('custom_') && <><button onClick={() => { setEditName(selected.label); setEditError(''); setEditOpen(true); }} className="p-2 text-slate hover:text-teal rounded-md focus-ring" aria-label={`Sửa tên ${selected.label}`} title="Sửa tên"><Pencil size={17} /></button><button onClick={() => { setDeleteError(''); setDeleteOpen(true); }} className="p-2 text-slate hover:text-clay rounded-md focus-ring" aria-label={`Xóa ${selected.label}`} title="Xóa bộ quyền"><Trash2 size={17} /></button></>}
+              {role !== 'admin' && <><button onClick={() => { setEditName(selected.label); setEditError(''); setEditOpen(true); }} className="p-2 text-slate hover:text-teal rounded-md focus-ring" aria-label={`Sửa tên ${selected.label}`} title="Sửa tên"><Pencil size={17} /></button><button onClick={() => { setDeleteError(''); setDeleteOpen(true); }} className="p-2 text-slate hover:text-clay rounded-md focus-ring" aria-label={`Xóa ${selected.label}`} title="Xóa bộ quyền"><Trash2 size={17} /></button></>}
               {role !== 'admin' && <button onClick={save} disabled={saving} className="bg-teal hover:bg-teal-dark disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-md">{saving ? 'Đang lưu...' : 'Lưu bộ quyền'}</button>}
             </div>
           </div>

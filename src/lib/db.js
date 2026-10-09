@@ -67,7 +67,7 @@ export async function queryOne(text, params) {
 }
 
 let schemaReadyPromise = null;
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 /** Đảm bảo bảng đã được tạo & seed dữ liệu mẫu. Gọi an toàn nhiều lần — chỉ chạy thật sự một lần. */
 export function ensureSchema() {
@@ -217,6 +217,7 @@ export async function migrateSchema() {
   await pool.query("ALTER TABLE employees ADD COLUMN IF NOT EXISTS permissions JSONB NOT NULL DEFAULT '{}'::jsonb");
   await pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0');
   await pool.query('ALTER TABLE role_permissions ADD COLUMN IF NOT EXISTS label TEXT');
+  await pool.query('ALTER TABLE role_permissions ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT false');
   await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS role_permissions_label_unique ON role_permissions (LOWER(label)) WHERE label IS NOT NULL');
   await pool.query(`
     CREATE INDEX IF NOT EXISTS employees_department_idx ON employees (department_id);
