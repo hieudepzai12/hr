@@ -6,13 +6,14 @@ import { savePublicAvatar, deletePublicAvatar } from '@/lib/uploads';
 export const POST = withAuth(async (req, { params }, user) => {
   const { id } = await params;
   const targetId = Number(id);
-  const isManager = ['admin', 'director', 'manager'].includes(user.role);
+  const isManager = user.permissions.employees.manage;
   if (!isManager && user.id !== targetId) {
     return forbidden('Bạn chỉ có thể cập nhật ảnh đại diện của chính mình');
   }
 
   const emp = await queryOne('SELECT * FROM employees WHERE id = $1', [targetId]);
   if (!emp) return NextResponse.json({ error: 'Không tìm thấy nhân viên' }, { status: 404 });
+  if (emp.role === 'admin' && user.role !== 'admin') return forbidden();
 
   let formData;
   try {
@@ -38,11 +39,12 @@ export const POST = withAuth(async (req, { params }, user) => {
 export const DELETE = withAuth(async (req, { params }, user) => {
   const { id } = await params;
   const targetId = Number(id);
-  const isManager = ['admin', 'director', 'manager'].includes(user.role);
+  const isManager = user.permissions.employees.manage;
   if (!isManager && user.id !== targetId) return forbidden();
 
   const emp = await queryOne('SELECT * FROM employees WHERE id = $1', [targetId]);
   if (!emp) return NextResponse.json({ error: 'Không tìm thấy nhân viên' }, { status: 404 });
+  if (emp.role === 'admin' && user.role !== 'admin') return forbidden();
 
   if (emp.avatar_path) await deletePublicAvatar(emp.avatar_path);
   await query('UPDATE employees SET avatar_path = NULL WHERE id = $1', [targetId]);

@@ -35,7 +35,6 @@ export const PUT = withAuth(async (req) => {
       Object.keys(permissions).some((key) => !keys.includes(key)) ||
       keys.some((key) => !permissions[key] || typeof permissions[key].view !== 'boolean' ||
         typeof permissions[key].manage !== 'boolean' || (permissions[key].manage && !permissions[key].view)) ||
-      (role === 'employee' && keys.some((key) => permissions[key].manage)) ||
       !ORGANIZATION_SCOPES.includes(permissions.organization?.scope) ||
       permissions.organization.view !== (permissions.organization.scope !== 'none') ||
       permissions.organization.manage) {

@@ -11,8 +11,7 @@ export const PUT = withAuth(async (req, { params }, user) => {
     return forbidden('Không có quyền chỉnh sửa công việc này');
   }
 
-  const isManager = ['admin', 'director', 'manager'].includes(user.role) || user.permissions.tasks.manage;
-  if (isManager && !user.permissions.tasks.manage) return forbidden();
+  const isManager = user.permissions.tasks.manage;
   const body = await req.json().catch(() => null);
   const validationError = validateTaskInput(body, { partial: true });
   if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });

@@ -25,7 +25,7 @@ function StatCard({ icon: Icon, label, value, accent }) {
 }
 
 function DashboardContent() {
-  const { user, isManager } = useAuth();
+  const { user, can } = useAuth();
   const [stats, setStats] = useState(null);
 
   useEffect(() => {
@@ -39,11 +39,11 @@ function DashboardContent() {
   return (
     <Layout title={`Chào ${user.full_name.split(' ').pop()}`} subtitle={format(new Date(), "'Hôm nay là' dd/MM/yyyy")}>
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {isManager && <StatCard icon={Users} label="Nhân viên đang làm việc" value={stats.totalEmployees} accent="#3F7069" />}
-        {isManager && <StatCard icon={Building2} label="Phòng ban" value={stats.totalDepartments} accent="#5B5F97" />}
+        {can('employees', 'manage') && <StatCard icon={Users} label="Nhân viên đang làm việc" value={stats.totalEmployees} accent="#3F7069" />}
+        {can('employees', 'manage') && <StatCard icon={Building2} label="Phòng ban" value={stats.totalDepartments} accent="#5B5F97" />}
         <StatCard icon={ClipboardList} label="Công việc đang thực hiện" value={statusCount(stats.tasksByStatus, 'in_progress')} accent="#D98E3F" />
         <StatCard icon={AlertTriangle} label="Công việc quá hạn" value={stats.overdueTasks} accent="#B85C4A" />
-        {isManager && <StatCard icon={ClipboardList} label="Báo cáo chờ duyệt" value={stats.pendingReports ?? 0} accent="#8A9B6E" />}
+        {can('reports', 'manage') && <StatCard icon={ClipboardList} label="Báo cáo chờ duyệt" value={stats.pendingReports ?? 0} accent="#8A9B6E" />}
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">

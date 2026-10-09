@@ -194,7 +194,7 @@ function EmployeesContent() {
                       {isManager && (user?.role === 'admin' || emp.role !== 'admin') && <button onClick={() => openEdit(emp)} className="p-1.5 text-slate hover:text-teal transition-colors focus-ring rounded" aria-label={`Sửa ${emp.full_name}`}>
                         <Pencil size={15} />
                       </button>}
-                      {user?.role === 'admin' && emp.role !== 'admin' && <button onClick={() => deactivate(emp.id)} className="p-1.5 text-slate hover:text-clay transition-colors focus-ring rounded" aria-label={`Vô hiệu hóa ${emp.full_name}`}>
+                      {isManager && emp.role !== 'admin' && <button onClick={() => deactivate(emp.id)} className="p-1.5 text-slate hover:text-clay transition-colors focus-ring rounded" aria-label={`Vô hiệu hóa ${emp.full_name}`}>
                         <UserX size={15} />
                       </button>}
                       {user?.role === 'admin' && emp.id !== user.id && <button onClick={() => openPassword(emp)} className="p-1.5 text-slate hover:text-teal transition-colors focus-ring rounded" aria-label={`Đặt lại mật khẩu cho ${emp.full_name}`} title="Đặt lại mật khẩu"><KeyRound size={15} /></button>}

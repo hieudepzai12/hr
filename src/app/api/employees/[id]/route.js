@@ -57,4 +57,4 @@ export const DELETE = withAuth(async (req, { params }) => {
   const { rowCount } = await query(`UPDATE employees SET status = 'inactive' WHERE id = $1 AND role <> 'admin'`, [id]);
   if (!rowCount) return NextResponse.json({ error: 'Không thể xóa tài khoản admin hoặc tài khoản không tồn tại' }, { status: 403 });
   return NextResponse.json({ success: true });
-}, { roles: ['admin'] });
+}, { roles: ['admin', 'director', 'manager'] });

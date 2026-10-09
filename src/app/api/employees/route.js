@@ -18,6 +18,7 @@ export const GET = withAuth(async (req, ctx, user) => {
   const fields = searchParams.get('fields');
   if (fields && fields !== 'options') return NextResponse.json({ error: 'Trường dữ liệu không hợp lệ' }, { status: 400 });
   const isManager = Boolean(user.permissions.employees.manage);
+  const canListAssignees = fields === 'options' && (user.permissions.tasks.manage || user.permissions.kpi.manage);
 
   let sql = fields === 'options' ? `SELECT e.id, e.full_name, e.role, e.position
              FROM employees e WHERE 1=1` : `SELECT e.id, e.full_name, e.email, e.role, e.position, e.department_id, e.manager_id,
@@ -25,7 +26,7 @@ export const GET = withAuth(async (req, ctx, user) => {
              FROM employees e LEFT JOIN departments d ON e.department_id = d.id WHERE 1=1`;
   const params = [];
 
-  if (!isManager) {
+  if (!isManager && !canListAssignees) {
     // Nhân viên thường: chỉ xem được đồng nghiệp cùng phòng ban của mình, bỏ qua mọi filter khác từ client.
     const myDeptId = user.department_id ?? -1;
     params.push(myDeptId, user.id);

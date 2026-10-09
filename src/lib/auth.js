@@ -89,10 +89,13 @@ export function withAuth(handler, { roles } = {}) {
     if (tokenUser.ver !== user.token_version) return unauthorized();
     user.permissions = effectivePermissions(user.role, user.role_permissions);
     const required = permissionForRequest(pathname, req.method);
-    const customManager = user.role.startsWith('custom_') && roles?.includes('manager') &&
-      required?.[1] === 'manage' && user.permissions[required[0]]?.manage;
-    if (roles && !roles.includes(user.role) && !customManager) return forbidden();
-    if (required && !user.permissions[required[0]]?.[required[1]]) return forbidden();
+    const grantedManager = roles?.includes('manager') && required?.[1] === 'manage' &&
+      user.permissions[required[0]]?.manage;
+    if (roles && !roles.includes(user.role) && !grantedManager) return forbidden();
+    const canListAssignees = pathname === '/api/employees' && req.method === 'GET' &&
+      new URL(req.url).searchParams.get('fields') === 'options' &&
+      (user.permissions.tasks.manage || user.permissions.kpi.manage);
+    if (required && !user.permissions[required[0]]?.[required[1]] && !canListAssignees) return forbidden();
     return handler(req, ctx, user);
   };
 }

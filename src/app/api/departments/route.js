@@ -3,7 +3,7 @@ import { query } from '@/lib/db';
 import { withAuth } from '@/lib/auth';
 
 export const GET = withAuth(async (req, ctx, user) => {
-  const isManager = ['admin', 'director', 'manager'].includes(user.role) || user.permissions.departments.manage;
+  const isManager = user.permissions.departments.manage;
   if (isManager) {
     const { rows } = await query(`
       SELECT d.*, COUNT(e.id) FILTER (WHERE e.status = 'active') AS employee_count

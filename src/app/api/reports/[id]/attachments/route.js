@@ -4,7 +4,7 @@ import { withAuth, forbidden } from '@/lib/auth';
 import { savePrivateAttachment } from '@/lib/uploads';
 
 function canAccessReport(report, user) {
-  if (['admin', 'director', 'manager'].includes(user.role)) return true;
+  if (user.permissions.reports.manage) return true;
   return report.employee_id === user.id;
 }
 
