@@ -43,7 +43,7 @@ export default function Layout({ title, subtitle, actions, children }) {
   });
   return <div className="app-shell min-h-screen w-full max-w-full overflow-x-clip bg-paper lg:flex">
     {mobileOpen && <button type="button" aria-label="Đóng menu" className="fixed inset-0 z-30 bg-ink/50 lg:hidden" onClick={() => setMobileOpen(false)} />}
-    <Sidebar collapsed={collapsed} mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} onToggle={toggleCollapsed} alertsCount={alerts.length} />
+    <Sidebar collapsed={collapsed} mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} onToggle={toggleCollapsed} />
     <div className="w-full min-w-0 max-w-full lg:flex-1">
       <header className="app-header sticky top-0 z-20 flex min-h-[76px] items-center justify-between gap-3 border-b border-line bg-white/95 px-4 backdrop-blur sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center gap-3">

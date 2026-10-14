@@ -22,7 +22,7 @@ const groups = [
   { label: 'Hệ thống', items: [{ to: '/phan-quyen', label: 'Phân quyền', icon: ShieldCheck, adminOnly: true }] },
 ];
 
-export default function Sidebar({ collapsed = false, mobileOpen = false, onClose = () => {}, onToggle = () => {}, alertsCount = 0 }) {
+export default function Sidebar({ collapsed = false, mobileOpen = false, onClose = () => {}, onToggle = () => {} }) {
   const { user, logout, can } = useAuth();
   const pathname = usePathname();
   const compact = collapsed && !mobileOpen;
@@ -50,7 +50,6 @@ export default function Sidebar({ collapsed = false, mobileOpen = false, onClose
               className={`relative flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors focus-ring ${compact ? 'justify-center' : ''} ${active ? 'bg-[#294368] text-white shadow-[inset_3px_0_0_#78a8f2]' : 'text-[#d4dfed] hover:bg-white/10 hover:text-white'}`}>
               <Icon size={18} className="shrink-0" strokeWidth={1.9} />
               {!compact && <span className="truncate">{label}</span>}
-              {to === '/timeline' && alertsCount > 0 && !compact && <span className="ml-auto rounded-full bg-[#bf3f4f] px-1.5 text-[10px] font-bold text-white">{alertsCount}</span>}
             </Link>;
           })}</div>
         </div>;
