@@ -134,6 +134,14 @@ function EmployeesContent() {
     }
   };
 
+  const employeeActions = (emp) => <div className="flex flex-wrap items-center justify-end gap-1">
+    {isManager && (user?.role === 'admin' || emp.role !== 'admin') && <button onClick={() => openEdit(emp)} className="p-1.5 text-slate hover:text-teal transition-colors focus-ring rounded" aria-label={`Sửa ${emp.full_name}`}><Pencil size={15} /></button>}
+    {isManager && emp.role !== 'admin' && <button onClick={() => deactivate(emp.id)} className="p-1.5 text-slate hover:text-clay transition-colors focus-ring rounded" aria-label={`Vô hiệu hóa ${emp.full_name}`}><UserX size={15} /></button>}
+    {user?.role === 'admin' && emp.id !== user.id && <button onClick={() => openPassword(emp)} className="p-1.5 text-slate hover:text-teal transition-colors focus-ring rounded" aria-label={`Đặt lại mật khẩu cho ${emp.full_name}`} title="Đặt lại mật khẩu"><KeyRound size={15} /></button>}
+    {emp.id === user.id && <button onClick={() => openPassword(emp)} className="p-1.5 text-slate hover:text-teal transition-colors focus-ring rounded" aria-label="Đổi mật khẩu của tôi" title="Đổi mật khẩu"><KeyRound size={15} /></button>}
+    {isManager && emp.role === 'admin' && <span className="px-2 text-xs text-slate">Tài khoản bảo vệ</span>}
+  </div>;
+
   return (
     <Layout
       title="Nhân viên"
@@ -155,7 +163,24 @@ function EmployeesContent() {
         />
       </div>
 
-      <div className="bg-paper-raised rounded-lg border border-line overflow-hidden">
+      <div className="space-y-3 md:hidden">
+        {employees.map((emp) => <article key={emp.id} className="min-w-0 rounded-lg border border-line bg-paper-raised p-4 text-sm">
+          <div className="flex min-w-0 items-center gap-3 border-b border-line pb-3">
+            <Avatar name={emp.full_name} color={emp.avatar_color} avatarPath={emp.avatar_path} size={32} />
+            <div className="min-w-0"><div className="break-words font-semibold text-ink">{emp.full_name}</div><div className="break-all text-xs text-slate">{emp.email}</div></div>
+          </div>
+          <dl className="space-y-2 py-3">
+            <div className="flex min-w-0 justify-between gap-3"><dt className="shrink-0 text-slate">Chức vụ</dt><dd className="min-w-0 break-words text-right text-ink">{emp.position || '—'}</dd></div>
+            <div className="flex min-w-0 justify-between gap-3"><dt className="shrink-0 text-slate">Phòng ban</dt><dd className="min-w-0 break-words text-right text-ink">{emp.department_name || '—'}</dd></div>
+            <div className="flex min-w-0 justify-between gap-3"><dt className="shrink-0 text-slate">Quản lý</dt><dd className="min-w-0 break-words text-right text-ink">{managerOptions.find((person) => person.id === emp.manager_id)?.full_name || '—'}</dd></div>
+            <div className="flex min-w-0 justify-between gap-3"><dt className="shrink-0 text-slate">Vai trò</dt><dd className="min-w-0 break-words text-right text-ink">{roles.find((item) => item.role === emp.role)?.label || ROLE_LABEL[emp.role] || emp.role}</dd></div>
+            <div className="flex min-w-0 justify-between gap-3"><dt className="shrink-0 text-slate">Trạng thái</dt><dd className="text-right text-ink">{emp.status === 'active' ? 'Đang làm việc' : 'Đã nghỉ'}</dd></div>
+          </dl>
+          <div className="border-t border-line pt-2">{employeeActions(emp)}</div>
+        </article>)}
+      </div>
+
+      <div className="hidden overflow-x-auto rounded-lg border border-line bg-paper-raised md:block">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-line text-left text-xs text-slate">
@@ -189,19 +214,7 @@ function EmployeesContent() {
                     {emp.status === 'active' ? 'Đang làm việc' : 'Đã nghỉ'}
                   </span>
                 </td>
-                <td className="px-5 py-3">
-                    <div className="flex items-center gap-1 justify-end">
-                      {isManager && (user?.role === 'admin' || emp.role !== 'admin') && <button onClick={() => openEdit(emp)} className="p-1.5 text-slate hover:text-teal transition-colors focus-ring rounded" aria-label={`Sửa ${emp.full_name}`}>
-                        <Pencil size={15} />
-                      </button>}
-                      {isManager && emp.role !== 'admin' && <button onClick={() => deactivate(emp.id)} className="p-1.5 text-slate hover:text-clay transition-colors focus-ring rounded" aria-label={`Vô hiệu hóa ${emp.full_name}`}>
-                        <UserX size={15} />
-                      </button>}
-                      {user?.role === 'admin' && emp.id !== user.id && <button onClick={() => openPassword(emp)} className="p-1.5 text-slate hover:text-teal transition-colors focus-ring rounded" aria-label={`Đặt lại mật khẩu cho ${emp.full_name}`} title="Đặt lại mật khẩu"><KeyRound size={15} /></button>}
-                      {emp.id === user.id && <button onClick={() => openPassword(emp)} className="p-1.5 text-slate hover:text-teal transition-colors focus-ring rounded" aria-label="Đổi mật khẩu của tôi" title="Đổi mật khẩu"><KeyRound size={15} /></button>}
-                      {isManager && emp.role === 'admin' && <span className="text-xs text-slate px-2">Tài khoản bảo vệ</span>}
-                    </div>
-                  </td>
+                <td className="px-5 py-3">{employeeActions(emp)}</td>
               </tr>
             ))}
           </tbody>
