@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { LayoutGrid, Users, Building2, Network, FileText, CalendarClock, Target, LogOut, ShieldCheck, ContactRound, PanelLeftClose, PanelLeftOpen, X, Menu } from 'lucide-react';
+import { LayoutGrid, Users, Building2, Network, FileText, CalendarClock, Target, LogOut, ShieldCheck, ContactRound, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 const groups = [
@@ -22,18 +22,18 @@ const groups = [
   { label: 'Hệ thống', items: [{ to: '/phan-quyen', label: 'Phân quyền', icon: ShieldCheck, adminOnly: true }] },
 ];
 
-export default function Sidebar({ collapsed = false, mobileOpen = false, onClose = () => {}, onOpen = () => {}, onToggle = () => {}, alertsCount = 0 }) {
+export default function Sidebar({ collapsed = false, mobileOpen = false, onClose = () => {}, onToggle = () => {}, alertsCount = 0 }) {
   const { user, logout, can } = useAuth();
   const pathname = usePathname();
   const compact = collapsed && !mobileOpen;
-  return <aside id="app-sidebar" className={`app-sidebar fixed inset-y-0 left-0 z-40 flex flex-col border-r border-[#233957] bg-[#14243d] text-white transition-[width] duration-200 lg:sticky lg:top-0 lg:z-10 lg:h-screen ${mobileOpen ? 'w-64' : 'w-14'} ${compact ? 'lg:w-[76px]' : 'lg:w-64'}`}>
+  return <aside id="app-sidebar" className={`app-sidebar fixed inset-y-0 left-0 z-40 flex w-[min(16rem,100vw)] flex-col border-r border-[#233957] bg-[#14243d] text-white transition-[width,transform] duration-200 lg:sticky lg:top-0 lg:z-10 lg:h-screen lg:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full max-lg:invisible'} ${compact ? 'lg:w-[76px]' : 'lg:w-64'}`}>
     <div className={`flex min-h-[84px] items-center border-b border-white/10 ${mobileOpen ? 'justify-between gap-2 px-4' : 'justify-center px-2'} ${compact ? 'lg:justify-center lg:px-2' : 'lg:justify-between lg:gap-2 lg:px-4'}`}>
       {!compact && <Link href="/" aria-label="HR OTIS – Trang chủ" onClick={onClose} className={`min-w-0 items-center gap-3 rounded-md focus-ring ${mobileOpen ? 'flex' : 'hidden lg:flex'}`}>
         <Image src="/logo-otisminhchau2.png" alt="" width={40} height={40} priority className="h-10 w-10 shrink-0 rounded-lg bg-white object-contain p-1" />
-        <span className="min-w-0"><strong className="block text-sm font-bold tracking-[0.08em]">HR OTIS</strong><span className="block text-[11px] text-slate-300">Quản trị nhân sự</span></span>
+        <span className="min-w-0"><strong className="block truncate text-sm font-bold tracking-[0.08em]">HR OTIS</strong><span className="block truncate text-[11px] text-slate-300">Quản trị nhân sự</span></span>
       </Link>}
-      <button type="button" onClick={() => { if (window.matchMedia('(min-width: 1024px)').matches) onToggle(); else if (mobileOpen) onClose(); else onOpen(); }} aria-controls="app-sidebar" aria-label="Điều khiển thanh bên" title={mobileOpen ? 'Đóng thanh bên' : compact ? 'Mở rộng thanh bên' : 'Mở hoặc thu gọn thanh bên'} className="icon-button shrink-0 focus-ring" style={{ color: '#fff' }}>
-        <span className="lg:hidden">{mobileOpen ? <X size={20} /> : <Menu size={20} />}</span>
+      <button type="button" onClick={() => { if (window.matchMedia('(min-width: 1024px)').matches) onToggle(); else onClose(); }} aria-controls="app-sidebar" aria-label={mobileOpen ? 'Đóng menu' : 'Thu gọn thanh bên'} title={mobileOpen ? 'Đóng menu' : compact ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'} className="icon-button shrink-0 focus-ring" style={{ color: '#fff' }}>
+        <span className="lg:hidden"><X size={20} /></span>
         <span className="hidden lg:inline-flex">{compact ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}</span>
       </button>
     </div>
