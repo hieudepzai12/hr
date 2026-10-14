@@ -8,7 +8,7 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 function PersonNode({ person, peopleByManager }) {
   const children = peopleByManager.get(person.id) || [];
   return <li>
-    <div className="node-box">
+    <div className="node-box" title={`${person.position || person.role_label || ''} · ${person.full_name}`}>
       <div className="node-title">{person.position || person.role_label}</div>
       <div className="node-name">{person.full_name}</div>
     </div>
@@ -53,7 +53,7 @@ function OrgChartContent() {
       <p className="text-sm text-slate">Chưa có nhân sự để hiển thị.</p>
     ) : (
       <div className="bg-paper-raised rounded-lg border border-line overflow-x-auto">
-        <div className="min-w-max px-8 py-10"><div className="org-tree"><ul>{roots.map((person) =>
+        <div className="min-w-0 px-3 py-4 md:min-w-max md:px-8 md:py-10"><div className="org-tree"><ul>{roots.map((person) =>
           <PersonNode key={person.id} person={person} peopleByManager={peopleByManager} />
         )}</ul></div></div>
       </div>

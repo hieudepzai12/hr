@@ -2,17 +2,13 @@ import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { withAuth, forbidden } from '@/lib/auth';
 import { readPrivateAttachment, deletePrivateAttachment } from '@/lib/uploads';
-
-function canAccessReport(report, user) {
-  if (user.permissions.reports.manage) return true;
-  return report.employee_id === user.id;
-}
+import { canReport, loadReport } from '@/lib/report-service';
 
 export const GET = withAuth(async (req, { params }, user) => {
   const { id, attachmentId } = await params;
-  const report = await queryOne('SELECT * FROM reports WHERE id = $1', [id]);
-  if (!report) return NextResponse.json({ error: 'Không tìm thấy báo cáo' }, { status: 404 });
-  if (!canAccessReport(report, user)) return forbidden();
+  const report = await loadReport(id);
+  if (!report || report.deleted_at) return NextResponse.json({ error: 'Không tìm thấy báo cáo' }, { status: 404 });
+  if (!canReport(user, 'view', report)) return forbidden();
 
   const att = await queryOne(
     `SELECT * FROM attachments WHERE id = $1 AND entity_type = 'report' AND entity_id = $2`,
@@ -35,9 +31,10 @@ export const GET = withAuth(async (req, { params }, user) => {
 
 export const DELETE = withAuth(async (req, { params }, user) => {
   const { id, attachmentId } = await params;
-  const report = await queryOne('SELECT * FROM reports WHERE id = $1', [id]);
-  if (!report) return NextResponse.json({ error: 'Không tìm thấy báo cáo' }, { status: 404 });
-  if (!canAccessReport(report, user)) return forbidden();
+  const report = await loadReport(id);
+  if (!report || report.deleted_at) return NextResponse.json({ error: 'Không tìm thấy báo cáo' }, { status: 404 });
+  if (!canReport(user, 'edit', report)) return forbidden();
+  if (!['draft', 'reopened', 'rejected'].includes(report.status)) return NextResponse.json({ error: 'Báo cáo đang khóa' }, { status: 409 });
 
   const att = await queryOne(
     `SELECT * FROM attachments WHERE id = $1 AND entity_type = 'report' AND entity_id = $2`,

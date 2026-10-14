@@ -56,6 +56,21 @@ export function query(text, params) {
   return pool.query(text, params);
 }
 
+export async function transaction(work) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await work(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export function closeDb() {
   return pool.end();
 }
@@ -67,7 +82,7 @@ export async function queryOne(text, params) {
 }
 
 let schemaReadyPromise = null;
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 4;
 
 /** Đảm bảo bảng đã được tạo & seed dữ liệu mẫu. Gọi an toàn nhiều lần — chỉ chạy thật sự một lần. */
 export function ensureSchema() {
@@ -102,7 +117,9 @@ async function verifySchema() {
   } catch (error) {
     if (error.code !== '42P01') throw error;
   }
-  await migrateSchema();
+  const error = new Error('Database schema is outdated; run npm run migrate before serving production traffic');
+  error.code = 'SCHEMA_OUTDATED';
+  throw error;
 }
 
 export async function migrateSchema() {
@@ -218,6 +235,123 @@ export async function migrateSchema() {
   await pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0');
   await pool.query('ALTER TABLE role_permissions ADD COLUMN IF NOT EXISTS label TEXT');
   await pool.query('ALTER TABLE role_permissions ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT false');
+  await pool.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS source_import_key TEXT');
+  await pool.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS source_import_row JSONB');
+  await pool.query(`CREATE TABLE IF NOT EXISTS customers (
+    id SERIAL PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    short_name TEXT,
+    customer_group TEXT,
+    owner_id INTEGER REFERENCES employees(id) ON DELETE SET NULL,
+    department_id INTEGER REFERENCES departments(id) ON DELETE SET NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  await pool.query(`
+    ALTER TABLE tasks ADD COLUMN IF NOT EXISTS customer_id INTEGER REFERENCES customers(id) ON DELETE SET NULL;
+    ALTER TABLE tasks ADD COLUMN IF NOT EXISTS department_id INTEGER REFERENCES departments(id) ON DELETE SET NULL;
+    ALTER TABLE tasks ADD COLUMN IF NOT EXISTS business_group TEXT;
+    ALTER TABLE tasks ADD COLUMN IF NOT EXISTS data_period TEXT;
+    ALTER TABLE tasks ADD COLUMN IF NOT EXISTS expected_outcome TEXT;
+    ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completed_result TEXT;
+    ALTER TABLE tasks ADD COLUMN IF NOT EXISTS next_step TEXT;
+    ALTER TABLE tasks ADD COLUMN IF NOT EXISTS blockers TEXT;
+    ALTER TABLE tasks ADD COLUMN IF NOT EXISTS proposed_solution TEXT;
+    ALTER TABLE tasks ADD COLUMN IF NOT EXISTS leader_opinion TEXT;
+    ALTER TABLE tasks ADD COLUMN IF NOT EXISTS waiting_on TEXT;
+    ALTER TABLE tasks ADD COLUMN IF NOT EXISTS expected_response_date TEXT;
+    ALTER TABLE tasks ADD COLUMN IF NOT EXISTS planned_progress_date TEXT;
+    ALTER TABLE tasks ADD COLUMN IF NOT EXISTS planned_progress INTEGER;
+    ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
+    ALTER TABLE tasks ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ;
+    ALTER TABLE tasks ADD COLUMN IF NOT EXISTS accepted_by INTEGER REFERENCES employees(id) ON DELETE SET NULL;
+    ALTER TABLE tasks ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+    ALTER TABLE tasks ADD COLUMN IF NOT EXISTS deleted_reason TEXT;
+    ALTER TABLE tasks ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+    ALTER TABLE tasks ALTER COLUMN due_date DROP NOT NULL;
+    ALTER TABLE reports ADD COLUMN IF NOT EXISTS department_id INTEGER REFERENCES departments(id) ON DELETE SET NULL;
+    ALTER TABLE reports ADD COLUMN IF NOT EXISTS customer_id INTEGER REFERENCES customers(id) ON DELETE SET NULL;
+    ALTER TABLE reports ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+    ALTER TABLE reports ADD COLUMN IF NOT EXISTS deleted_reason TEXT;
+    ALTER TABLE reports ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;
+    ALTER TABLE reports ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ;
+    ALTER TABLE reports ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+  `);
+  await pool.query(`CREATE TABLE IF NOT EXISTS task_collaborators (
+    task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    PRIMARY KEY (task_id, employee_id)
+  )`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS task_updates (
+    id BIGSERIAL PRIMARY KEY,
+    task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE RESTRICT,
+    progress INTEGER NOT NULL,
+    result TEXT,
+    next_step TEXT,
+    blockers TEXT,
+    solution TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS report_items (
+    id BIGSERIAL PRIMARY KEY,
+    report_id INTEGER NOT NULL REFERENCES reports(id) ON DELETE CASCADE,
+    task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE RESTRICT,
+    employee_id INTEGER REFERENCES employees(id) ON DELETE SET NULL,
+    snapshot JSONB NOT NULL,
+    leader_opinion TEXT,
+    UNIQUE (report_id, task_id)
+  )`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS report_versions (
+    id BIGSERIAL PRIMARY KEY,
+    report_id INTEGER NOT NULL REFERENCES reports(id) ON DELETE CASCADE,
+    version INTEGER NOT NULL,
+    snapshot JSONB NOT NULL,
+    actor_id INTEGER REFERENCES employees(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (report_id, version)
+  )`);
+  await pool.query(`UPDATE tasks t SET department_id=e.department_id FROM employees e
+    WHERE t.assignee_id=e.id AND t.department_id IS NULL`);
+  await pool.query(`UPDATE reports r SET department_id=e.department_id FROM employees e
+    WHERE r.employee_id=e.id AND r.department_id IS NULL`);
+  await pool.query(`INSERT INTO report_versions (report_id, version, snapshot, actor_id)
+    SELECT r.id, 1, jsonb_build_object('report',to_jsonb(r),'items','[]'::jsonb),r.employee_id
+    FROM reports r ON CONFLICT (report_id,version) DO NOTHING`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS audit_logs (
+    id BIGSERIAL PRIMARY KEY,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    actor_id INTEGER REFERENCES employees(id) ON DELETE SET NULL,
+    action TEXT NOT NULL,
+    changes JSONB NOT NULL DEFAULT '{}'::jsonb,
+    reason TEXT,
+    version INTEGER,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS kpi_evidence (
+    id BIGSERIAL PRIMARY KEY,
+    evaluation_id INTEGER NOT NULL REFERENCES kpi_evaluations(id) ON DELETE CASCADE,
+    task_id INTEGER REFERENCES tasks(id) ON DELETE RESTRICT,
+    report_id INTEGER REFERENCES reports(id) ON DELETE RESTRICT,
+    snapshot JSONB NOT NULL,
+    CHECK ((task_id IS NOT NULL) <> (report_id IS NOT NULL))
+  )`);
+  await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS tasks_source_import_key_unique ON tasks (source_import_key) WHERE source_import_key IS NOT NULL');
+  await pool.query('CREATE INDEX IF NOT EXISTS kpi_evidence_eval_idx ON kpi_evidence (evaluation_id)');
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS tasks_customer_idx ON tasks (customer_id);
+    CREATE INDEX IF NOT EXISTS tasks_department_idx ON tasks (department_id);
+    CREATE INDEX IF NOT EXISTS task_collaborators_employee_idx ON task_collaborators (employee_id);
+    CREATE INDEX IF NOT EXISTS task_updates_task_idx ON task_updates (task_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS reports_department_idx ON reports (department_id);
+    CREATE INDEX IF NOT EXISTS reports_customer_idx ON reports (customer_id);
+    CREATE INDEX IF NOT EXISTS report_items_task_idx ON report_items (task_id);
+    CREATE INDEX IF NOT EXISTS audit_logs_entity_idx ON audit_logs (entity_type, entity_id, created_at DESC);
+  `);
   await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS role_permissions_label_unique ON role_permissions (LOWER(label)) WHERE label IS NOT NULL');
   await pool.query(`
     CREATE INDEX IF NOT EXISTS employees_department_idx ON employees (department_id);

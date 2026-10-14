@@ -1,53 +1,71 @@
 import { NextResponse } from 'next/server';
-import { query } from '@/lib/db';
-import { withAuth } from '@/lib/auth';
+import { query, transaction } from '@/lib/db';
+import { withAuth, forbidden } from '@/lib/auth';
+import { scopeFor, scopeAllows } from '@/lib/access';
 import { parsePagination, pagedResult, appendPagination } from '@/lib/pagination';
+import { replaceReportItems, saveReportVersion } from '@/lib/report-service';
+import { writeAudit } from '@/lib/audit';
 
 export const GET = withAuth(async (req, ctx, user) => {
   const { searchParams } = new URL(req.url);
   const pagination = parsePagination(searchParams);
   if (pagination === false) return NextResponse.json({ error: 'Phân trang không hợp lệ' }, { status: 400 });
-  const employee_id = searchParams.get('employee_id');
-  const status = searchParams.get('status');
-  const type = searchParams.get('type');
-
-  let sql = `SELECT ${pagination ? `r.id, r.title, LEFT(r.content, 240) AS excerpt, r.type, r.employee_id,
-             r.status, r.feedback, r.period_start, r.period_end, r.created_at, r.reviewed_at, r.reviewed_by` : 'r.*'},
-             e.full_name as employee_name, e.avatar_color, e.avatar_path,
-             rv.full_name as reviewer_name
-             FROM reports r
-             JOIN employees e ON r.employee_id = e.id
-             LEFT JOIN employees rv ON r.reviewed_by = rv.id
-             WHERE 1=1`;
+  const scope = scopeFor(user, 'reports', 'view');
+  if (scope === 'none') return forbidden();
+  const deleted = searchParams.get('deleted') === '1';
+  if (deleted && scopeFor(user, 'reports', 'restore') === 'none') return forbidden();
   const params = [];
-
-  if (!user.permissions.reports.manage) {
-    params.push(user.id);
-    sql += ` AND r.employee_id = $${params.length}`;
-  } else if (employee_id) {
-    params.push(employee_id);
-    sql += ` AND r.employee_id = $${params.length}`;
+  let sql = `SELECT ${pagination ? `r.id, r.title, LEFT(r.content, 240) AS excerpt, r.type, r.employee_id,
+    r.department_id, r.customer_id, r.status, r.feedback, r.period_start, r.period_end, r.created_at,
+    r.updated_at, r.submitted_at, r.deleted_at, r.version` : 'r.*'},
+    e.full_name AS employee_name, d.name AS department_name, c.name AS customer_name
+    FROM reports r JOIN employees e ON e.id=r.employee_id
+    LEFT JOIN departments d ON d.id=COALESCE(r.department_id,e.department_id)
+    LEFT JOIN customers c ON c.id=r.customer_id
+    WHERE r.deleted_at IS ${deleted ? 'NOT NULL' : 'NULL'}`;
+  if (scope === 'self') { params.push(user.id); sql += ` AND r.employee_id=$${params.length}`; }
+  if (scope === 'department') { params.push(user.department_id ?? -1); sql += ` AND COALESCE(r.department_id,e.department_id)=$${params.length}`; }
+  for (const [key, column] of Object.entries({ employee_id: 'r.employee_id', department_id: 'COALESCE(r.department_id,e.department_id)', customer_id: 'r.customer_id', status: 'r.status', type: 'r.type' })) {
+    const value = searchParams.get(key);
+    if (value) { params.push(value); sql += ` AND ${column}=$${params.length}`; }
   }
-  if (status) { params.push(status); sql += ` AND r.status = $${params.length}`; }
-  if (type) { params.push(type); sql += ` AND r.type = $${params.length}`; }
+  if (searchParams.get('from')) { params.push(searchParams.get('from')); sql += ` AND r.period_end >= $${params.length}`; }
+  if (searchParams.get('to')) { params.push(searchParams.get('to')); sql += ` AND r.period_start <= $${params.length}`; }
   sql = appendPagination(sql + ' ORDER BY r.created_at DESC, r.id DESC', params, pagination);
-
   const { rows } = await query(sql, params);
   return NextResponse.json(pagedResult(rows, pagination));
 });
 
 export const POST = withAuth(async (req, ctx, user) => {
   const body = await req.json().catch(() => null);
-  const { title, content, type, period_start, period_end } = body || {};
-  if (typeof title !== 'string' || !title.trim() || title.length > 500 ||
-      typeof content !== 'string' || !content.trim() || content.length > 100000 ||
-      (type && !['daily', 'weekly', 'monthly', 'project'].includes(type))) {
+  if (typeof body?.title !== 'string' || !body.title.trim() || body.title.length > 500 ||
+    typeof body.content !== 'string' || body.content.length > 100000 ||
+    !['daily', 'weekly', 'monthly', 'project'].includes(body.type || 'weekly') ||
+    (body.status && !['draft', 'submitted'].includes(body.status))) {
     return NextResponse.json({ error: 'Thông tin báo cáo không hợp lệ' }, { status: 400 });
   }
-  const { rows } = await query(
-    `INSERT INTO reports (title, content, type, employee_id, period_start, period_end)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [title, content, type || 'weekly', user.id, period_start || null, period_end || null]
-  );
-  return NextResponse.json(rows[0], { status: 201 });
+  if (!scopeAllows(user, 'reports', 'create', { ownerId: user.id, departmentId: user.department_id })) return forbidden();
+  if (body.period_start && body.period_end && body.period_start > body.period_end) {
+    return NextResponse.json({ error: 'Kỳ báo cáo không hợp lệ' }, { status: 400 });
+  }
+  try {
+    const report = await transaction(async (client) => {
+      const status = body.status || 'submitted';
+      const { rows } = await client.query(`INSERT INTO reports
+        (title, content, type, employee_id, department_id, customer_id, status, period_start, period_end, submitted_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [body.title.trim(), body.content, body.type || 'weekly', user.id, user.department_id,
+        body.customer_id || null, status, body.period_start || null, body.period_end || null,
+        status === 'submitted' ? new Date() : null]);
+      await replaceReportItems(client, rows[0].id, body.task_ids || [], user.id);
+      await saveReportVersion(client, rows[0].id, user.id);
+      await writeAudit(client, { entityType: 'report', entityId: rows[0].id, actorId: user.id,
+        action: status === 'submitted' ? 'submit' : 'create', after: rows[0], version: 1 });
+      return rows[0];
+    });
+    return NextResponse.json(report, { status: 201 });
+  } catch (error) {
+    if (['INVALID_TASKS', 'TASK_ACCESS'].includes(error.code)) return NextResponse.json({ error: error.message }, { status: 400 });
+    throw error;
+  }
 });

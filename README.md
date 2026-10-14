@@ -54,7 +54,7 @@ Các danh sách nhân viên, công việc, báo cáo và KPI tải từng trang 
    - `DATABASE_URL` = chuỗi kết nối Neon ở bước trên (dùng chung hoặc tạo project Neon riêng cho production)
    - `JWT_SECRET` = chuỗi ngẫu nhiên dài ít nhất 32 byte; bắt buộc ở mọi môi trường
    - `INITIAL_ADMIN_EMAIL` và `INITIAL_ADMIN_PASSWORD` = tài khoản quản trị đầu tiên khi cơ sở dữ liệu production còn trống (mật khẩu ít nhất 16 ký tự). Nếu production đang có tài khoản demo `admin@company.vn / admin123`, ứng dụng tự thay mật khẩu demo bằng `INITIAL_ADMIN_PASSWORD` trong lần chạy đầu sau khi cập nhật. Đăng nhập bằng mật khẩu mới rồi xoá biến mật khẩu này khỏi cấu hình.
-3. Trên máy triển khai hoặc CI, cấu hình cùng `DATABASE_URL`, `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD` nếu DB mới, rồi chạy `npm run migrate` **trước khi nhận request production**. Lệnh migration có thể chạy lại an toàn. Nếu chưa chạy, ứng dụng sẽ tự chạy một lần khi phát hiện schema còn thiếu; bước này có thể làm request đầu tiên chậm hơn.
+3. Sao lưu database, rồi trên máy triển khai hoặc CI cấu hình cùng `DATABASE_URL`, `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD` nếu DB mới, và chạy `npm run migrate` **trước khi nhận request production**. Ứng dụng production sẽ trả lỗi cấu hình nếu schema chưa lên phiên bản 4; không tự chạy migration trên production. Xác nhận `schema_migrations` có phiên bản 4 sau khi chạy. Lệnh migration có thể chạy lại an toàn.
 4. Vào [vercel.com](https://vercel.com) → **Add New Project** → chọn repo vừa đẩy → Vercel tự nhận diện Next.js, bấm **Deploy**.
 5. **Bật Vercel Blob** để lưu file bền vững: vào tab **Storage** của project trên Vercel → **Create Database** → chọn **Blob** → Connect vào project. Vercel sẽ **tự động thêm** biến `BLOB_READ_WRITE_TOKEN` — không cần bạn tự nhập.
 6. Redeploy lại (Vercel → Deployments → nút "Redeploy") để áp dụng biến môi trường mới.
@@ -62,6 +62,16 @@ Các danh sách nhân viên, công việc, báo cáo và KPI tải từng trang 
 Từ giờ, mọi ảnh đại diện và file đính kèm sẽ tự động lưu qua Vercel Blob thay vì đĩa cục bộ — ứng dụng phát hiện `BLOB_READ_WRITE_TOKEN` và chuyển chế độ tự động, không cần sửa code.
 
 ## Cấu trúc dự án
+
+### Migration cho danh mục khách hàng, kế hoạch tuần và quyền dữ liệu
+
+Migration đến phiên bản 4 trong `src/lib/db.js` bổ sung bảng `customers`, `task_collaborators`, `task_updates`, `report_items`, `report_versions`, `audit_logs`, `kpi_evidence` và các cột liên kết cho công việc/báo cáo. Công việc nhập Excel lưu dấu dòng nguồn và có chỉ mục chống nhập lại cùng dòng. Các bảng và dữ liệu cũ được giữ lại; báo cáo cũ được tạo bản phiên bản 1. Chạy `npm run migrate` với `DATABASE_URL` trỏ đúng môi trường cần cập nhật, sau khi sao lưu DB. **Không chạy lệnh này với database production trong quá trình phát triển.**
+
+Các báo cáo mới lưu bản chụp phần việc theo tuần. Khi chuyển tiếp công việc sang tuần khác, chọn lại cùng công việc trong báo cáo mới để giữ nguyên mã công việc. Báo cáo đã duyệt cần được người có quyền mở lại, sửa thành phiên bản mới và gửi duyệt lại.
+
+Trong **Timeline & Deadline → Nhập Excel**, chọn file `.xlsx` tối đa 5 MB có cột **Công việc**. Ứng dụng tìm cột người thực hiện, khách hàng, phòng ban, hạn chót, tiến độ và KPI theo tên cột. Xem trước từng dòng, đối chiếu tên, sửa hạn, xác nhận giá trị 0.x là phần trăm, hoặc bỏ qua dòng không nhập. Dòng ghi “Đã hoàn thành” được đưa vào trạng thái chờ nghiệm thu; không tự suy ra ngày hoàn thành. Dòng trùng file hoặc trùng công việc/người/kỳ dữ liệu được bỏ qua. Giữ file nguồn để đối chiếu với tên sheet và số dòng được lưu trong công việc.
+
+Trong **Đánh giá KPI**, người đánh giá có thể chọn công việc và báo cáo của nhân viên làm căn cứ. Hệ thống lưu bản chụp trạng thái, hạn, nghiệm thu và kỳ báo cáo tại thời điểm chấm; điểm tiêu chí vẫn do người đánh giá nhập. Có thể chạy `node scripts/verify-workflow.mjs` để kiểm tra luồng local; script chỉ chấp nhận `DATABASE_URL` trỏ `localhost` hoặc `127.0.0.1` và dọn dữ liệu thử sau khi chạy.
 
 ```
 hr-nextjs/

@@ -2,17 +2,14 @@ import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { withAuth, forbidden } from '@/lib/auth';
 import { savePrivateAttachment } from '@/lib/uploads';
-
-function canAccessTask(task, user) {
-  if (user.permissions.tasks.manage) return true;
-  return task.assignee_id === user.id;
-}
+import { canViewTask, canEditTask, isTaskParticipant } from '@/lib/task-access';
+import { scopeFor } from '@/lib/access';
 
 export const GET = withAuth(async (req, { params }, user) => {
   const { id } = await params;
-  const task = await queryOne('SELECT * FROM tasks WHERE id = $1', [id]);
+  const task = await queryOne('SELECT * FROM tasks WHERE id = $1 AND deleted_at IS NULL', [id]);
   if (!task) return NextResponse.json({ error: 'Không tìm thấy công việc' }, { status: 404 });
-  if (!canAccessTask(task, user)) return forbidden();
+  if (!await canViewTask(task, user)) return forbidden();
 
   const { rows } = await query(
     `SELECT id, original_name, mime_type, size, created_at FROM attachments
@@ -24,9 +21,9 @@ export const GET = withAuth(async (req, { params }, user) => {
 
 export const POST = withAuth(async (req, { params }, user) => {
   const { id } = await params;
-  const task = await queryOne('SELECT * FROM tasks WHERE id = $1', [id]);
+  const task = await queryOne('SELECT * FROM tasks WHERE id = $1 AND deleted_at IS NULL', [id]);
   if (!task) return NextResponse.json({ error: 'Không tìm thấy công việc' }, { status: 404 });
-  if (!canAccessTask(task, user)) return forbidden();
+  if (!canEditTask(task, user) && !(scopeFor(user, 'tasks', 'edit') !== 'none' && await isTaskParticipant(task, user.id))) return forbidden();
 
   let formData;
   try {

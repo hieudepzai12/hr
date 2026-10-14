@@ -2,17 +2,14 @@ import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { withAuth, forbidden } from '@/lib/auth';
 import { readPrivateAttachment, deletePrivateAttachment } from '@/lib/uploads';
-
-function canAccessTask(task, user) {
-  if (user.permissions.tasks.manage) return true;
-  return task.assignee_id === user.id;
-}
+import { canViewTask, canEditTask, isTaskParticipant } from '@/lib/task-access';
+import { scopeFor } from '@/lib/access';
 
 export const GET = withAuth(async (req, { params }, user) => {
   const { id, attachmentId } = await params;
-  const task = await queryOne('SELECT * FROM tasks WHERE id = $1', [id]);
+  const task = await queryOne('SELECT * FROM tasks WHERE id = $1 AND deleted_at IS NULL', [id]);
   if (!task) return NextResponse.json({ error: 'Không tìm thấy công việc' }, { status: 404 });
-  if (!canAccessTask(task, user)) return forbidden();
+  if (!await canViewTask(task, user)) return forbidden();
 
   const att = await queryOne(
     `SELECT * FROM attachments WHERE id = $1 AND entity_type = 'task' AND entity_id = $2`,
@@ -35,9 +32,9 @@ export const GET = withAuth(async (req, { params }, user) => {
 
 export const DELETE = withAuth(async (req, { params }, user) => {
   const { id, attachmentId } = await params;
-  const task = await queryOne('SELECT * FROM tasks WHERE id = $1', [id]);
+  const task = await queryOne('SELECT * FROM tasks WHERE id = $1 AND deleted_at IS NULL', [id]);
   if (!task) return NextResponse.json({ error: 'Không tìm thấy công việc' }, { status: 404 });
-  if (!canAccessTask(task, user)) return forbidden();
+  if (!canEditTask(task, user) && !(scopeFor(user, 'tasks', 'edit') !== 'none' && await isTaskParticipant(task, user.id))) return forbidden();
 
   const att = await queryOne(
     `SELECT * FROM attachments WHERE id = $1 AND entity_type = 'task' AND entity_id = $2`,

@@ -73,12 +73,17 @@ export function withAuth(handler, { roles } = {}) {
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
       if (!isTrustedOrigin(req)) return forbidden();
     }
-    await ensureSchema();
+    try {
+      await ensureSchema();
+    } catch (error) {
+      if (error.code === 'SCHEMA_OUTDATED') return NextResponse.json({ error: 'Cơ sở dữ liệu cần được cập nhật trước khi sử dụng bản mới.' }, { status: 503 });
+      throw error;
+    }
     const tokenUser = getUserFromRequest(req);
     if (!tokenUser) return unauthorized();
     const pathname = new URL(req.url).pathname;
     const idSegments = pathname.match(/^\/api\/(?:employees|tasks|reports|kpi|departments)\/([^/]+)(?:\/attachments\/([^/]+))?/);
-    if (idSegments && [idSegments[1], idSegments[2]].filter(Boolean).some(value =>
+    if (idSegments && !['alerts', 'import', 'print', 'evidence'].includes(idSegments[1]) && [idSegments[1], idSegments[2]].filter(Boolean).some(value =>
       !/^[1-9]\d*$/.test(value) || Number(value) > 2147483647)) {
       return NextResponse.json({ error: 'ID không hợp lệ' }, { status: 400 });
     }

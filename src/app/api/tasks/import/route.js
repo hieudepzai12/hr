@@ -1,0 +1,112 @@
+import { NextResponse } from 'next/server';
+import { query, transaction } from '@/lib/db';
+import { withAuth, forbidden } from '@/lib/auth';
+import { scopeAllows, scopeFor } from '@/lib/access';
+import { parseExcelTasks, normalize, validIsoDate } from '@/lib/excel-import';
+import { writeAudit } from '@/lib/audit';
+
+export const runtime = 'nodejs';
+
+const personNames = (value) => value.split(/\s*\+\s*/).map((name) => name.trim()).filter(Boolean);
+
+export const POST = withAuth(async (req, ctx, user) => {
+  if (scopeFor(user, 'tasks', 'create') === 'none') return forbidden();
+  const form = await req.formData().catch(() => null);
+  const file = form?.get('file');
+  const action = form?.get('action');
+  if (!file || typeof file === 'string' || !/\.xlsx$/i.test(file.name) || file.size > 5 * 1024 * 1024 ||
+    !['preview', 'commit'].includes(action)) {
+    return NextResponse.json({ error: 'Chọn file .xlsx tối đa 5 MB' }, { status: 400 });
+  }
+  let parsed;
+  try { parsed = await parseExcelTasks(Buffer.from(await file.arrayBuffer())); }
+  catch (error) { return NextResponse.json({ error: error.message || 'Không đọc được file Excel' }, { status: 400 }); }
+  let overrides = {};
+  if (form.get('overrides')) {
+    try { overrides = JSON.parse(String(form.get('overrides') || '{}')); }
+    catch { return NextResponse.json({ error: 'Thông tin đối chiếu không hợp lệ' }, { status: 400 }); }
+  }
+  const [employeeRows, customerRows, departmentRows, duplicateRows] = await Promise.all([
+    query(`SELECT id, full_name, department_id FROM employees WHERE status='active'
+      AND ($1='all' OR ($1='department' AND department_id=$2) OR ($1='self' AND id=$3))`,
+      [scopeFor(user, 'tasks', 'create'), user.department_id ?? -1, user.id]),
+    query(`SELECT id, code, name FROM customers WHERE status='active'
+      AND ($1='all' OR ($1='department' AND department_id=$2) OR ($1='self' AND owner_id=$3))`,
+      [scopeFor(user, 'customers', 'view'), user.department_id ?? -1, user.id]),
+    query('SELECT id, name FROM departments'),
+    query('SELECT source_import_key, title, assignee_id, data_period FROM tasks WHERE source_import_key=ANY($1::text[]) OR lower(title)=ANY($2::text[])',
+      [parsed.map((row) => row.source_key), parsed.map((row) => row.title.toLowerCase())]),
+  ]);
+  const employees = employeeRows.rows;
+  const customers = customerRows.rows;
+  const departments = departmentRows.rows;
+  const matches = (items, key, value) => items.filter((item) => normalize(item[key]) === normalize(value));
+  const prepared = parsed.map((row) => {
+    const selection = overrides[row.source_key] || {};
+    const names = personNames(row.assignee_name);
+    const people = names.map((name) => matches(employees, 'full_name', name));
+    const assigneeId = Number(selection.assignee_id || (people[0]?.length === 1 ? people[0][0].id : 0));
+    const assignee = employees.find((person) => person.id === assigneeId);
+    const collaborators = Array.isArray(selection.collaborator_ids) ? selection.collaborator_ids.map(Number) :
+      people.slice(1).flatMap((found) => found.length === 1 ? [found[0].id] : []);
+    const customerFound = row.customer_name ? customers.filter((customer) =>
+      normalize(customer.name) === normalize(row.customer_name) || normalize(customer.code) === normalize(row.customer_name)) : [];
+    const customerId = Number(selection.customer_id || (customerFound.length === 1 ? customerFound[0].id : 0));
+    const departmentFound = row.department_name ? matches(departments, 'name', row.department_name) : [];
+    const departmentId = Number(selection.department_id || (departmentFound.length === 1 ? departmentFound[0].id : assignee?.department_id || 0));
+    const dueDate = selection.due_date === undefined ? row.due_date : selection.due_date;
+    const duplicate = duplicateRows.rows.some((existing) => existing.source_import_key === row.source_key ||
+      (normalize(existing.title) === normalize(row.title) && Number(existing.assignee_id) === assigneeId &&
+        (existing.data_period || '') === (row.data_period || '')));
+    const issues = [];
+    if (row.title.length > 500) issues.push('Tên công việc dài quá 500 ký tự');
+    if (!assignee) issues.push('Chưa đối chiếu được người phụ trách');
+    if (!Array.isArray(selection.collaborator_ids) && people.slice(1).some((found) => found.length !== 1)) issues.push('Chưa đối chiếu được người phối hợp');
+    if (collaborators.some((id) => !employees.some((person) => person.id === id))) issues.push('Người phối hợp ngoài phạm vi');
+    if (row.customer_name && !customers.some((customer) => customer.id === customerId)) issues.push('Chưa đối chiếu được khách hàng');
+    if (!departmentId || !departments.some((dept) => dept.id === departmentId)) issues.push('Chưa có phòng ban hợp lệ');
+    if (assignee && !scopeAllows(user, 'tasks', 'create', { ownerId: assigneeId, departmentId })) issues.push('Ngoài phạm vi quyền tạo');
+    if (row.invalid_due_date && selection.due_date === undefined) issues.push('Hạn chót không đọc được');
+    if (dueDate && !validIsoDate(dueDate)) issues.push('Hạn chót không hợp lệ');
+    if (!dueDate) issues.push('Chưa có hạn chót');
+    if (row.confirm_fraction && !selection.progress_confirmed) issues.push('Cần xác nhận tiến độ dạng 0.x');
+    if (row.progress != null && (row.progress < 0 || row.progress > 100)) issues.push('Tiến độ ngoài 0–100%');
+    if (row.progress != null && !Number.isInteger(row.progress)) issues.push('Tiến độ cần là số nguyên');
+    if ([row.business_group, row.data_period, row.result, row.blockers, row.solution].some((value) => value.length > 10000)) issues.push('Nội dung quá dài');
+    if (collaborators.length > 100) issues.push('Quá nhiều người phối hợp');
+    if (duplicate) issues.push('Có thể đã nhập công việc này');
+    return { ...row, assignee_id: assigneeId || null, collaborator_ids: collaborators,
+      customer_id: customerId || null, department_id: departmentId || null, due_date: dueDate || null,
+      duplicate, issues, skip: Boolean(selection.skip) };
+  });
+  if (action === 'preview') return NextResponse.json({ rows: prepared, employees, customers, departments });
+  const selected = prepared.filter((row) => !row.skip && !row.duplicate);
+  if (!selected.length) return NextResponse.json({ error: 'Không có công việc mới để nhập' }, { status: 400 });
+  const allowMissingDue = form.get('allow_missing_due') === 'true';
+  const invalid = selected.find((row) => row.issues.some((issue) => issue !== 'Chưa có hạn chót' || !allowMissingDue));
+  if (invalid) return NextResponse.json({ error: `Dòng ${invalid.sheet}!${invalid.row}: ${invalid.issues.join(', ')}` }, { status: 400 });
+  const created = await transaction(async (client) => {
+    const imported = [];
+    for (const row of selected) {
+      const { rows } = await client.query(`INSERT INTO tasks
+        (title, assignee_id, created_by, department_id, customer_id, business_group, data_period,
+          due_date, progress, status, completed_result, blockers, proposed_solution, source_import_key, source_import_row)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb)
+        ON CONFLICT DO NOTHING RETURNING *`,
+      [row.title, row.assignee_id, user.id, row.department_id, row.customer_id, row.business_group || null,
+        row.data_period || null, row.due_date, row.progress || 0, row.status, row.result || null,
+        row.blockers || null, row.solution || null, row.source_key,
+        JSON.stringify({ sheet: row.sheet, row: row.row, values: row.source })]);
+      if (!rows[0]) continue;
+      for (const employeeId of new Set(row.collaborator_ids)) {
+        if (employeeId !== row.assignee_id) await client.query('INSERT INTO task_collaborators (task_id,employee_id) VALUES ($1,$2)', [rows[0].id, employeeId]);
+      }
+      const { source_import_row, ...audited } = rows[0];
+      await writeAudit(client, { entityType: 'task', entityId: rows[0].id, actorId: user.id,
+        action: 'import', after: audited, reason: `${row.sheet}!${row.row}` });
+      imported.push(rows[0].id);
+    }
+    return imported;
+  });
+  return NextResponse.json({ imported: created.length, skipped: parsed.length - created.length, task_ids: created });
+});

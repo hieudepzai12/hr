@@ -30,6 +30,8 @@ export async function POST(req) {
     console.error('Login infrastructure error', { code: error.code, message: safeMessage });
     const message = error.code === 'AUTH_CONFIG'
       ? 'Hệ thống đăng nhập chưa được cấu hình. Vui lòng liên hệ quản trị.'
+      : error.code === 'SCHEMA_OUTDATED'
+        ? 'Cơ sở dữ liệu cần được cập nhật trước khi sử dụng bản mới.'
       : error.code === 'ADMIN_SETUP'
         ? 'Tài khoản quản trị cần đổi mật khẩu dùng thử trước khi đăng nhập.'
         : 'Không thể kết nối cơ sở dữ liệu. Vui lòng liên hệ quản trị.';

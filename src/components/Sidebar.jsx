@@ -3,81 +3,63 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { LayoutGrid, Users, Building2, Network, FileText, CalendarClock, Target, LogOut, ShieldCheck } from 'lucide-react';
+import { LayoutGrid, Users, Building2, Network, FileText, CalendarClock, Target, LogOut, ShieldCheck, ContactRound, PanelLeftClose, PanelLeftOpen, X, Menu } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import Avatar from './Avatar';
 
-const NAV_ITEMS = [
-  { to: '/', label: 'Tổng quan', icon: LayoutGrid, exact: true },
-  { to: '/nhan-vien', label: 'Nhân viên', icon: Users },
-  { to: '/so-do-to-chuc', label: 'Sơ đồ tổ chức', icon: Network },
-  { to: '/phong-ban', label: 'Phòng ban', icon: Building2 },
-  { to: '/bao-cao', label: 'Báo cáo', icon: FileText },
-  { to: '/timeline', label: 'Timeline & Deadline', icon: CalendarClock },
-  { to: '/kpi', label: 'Đánh giá KPI', icon: Target },
-  { to: '/phan-quyen', label: 'Phân quyền', icon: ShieldCheck, adminOnly: true },
+const groups = [
+  { label: 'Tổng quan', items: [{ to: '/', label: 'Tổng quan', icon: LayoutGrid, permission: 'dashboard' }] },
+  { label: 'Nhân sự', items: [
+    { to: '/nhan-vien', label: 'Nhân viên', icon: Users, permission: 'employees' },
+    { to: '/so-do-to-chuc', label: 'Sơ đồ tổ chức', icon: Network, permission: 'organization' },
+    { to: '/phong-ban', label: 'Phòng ban', icon: Building2, permission: 'departments' },
+  ] },
+  { label: 'Điều hành công việc', items: [
+    { to: '/timeline', label: 'Công việc & Deadline', icon: CalendarClock, permission: 'tasks' },
+    { to: '/bao-cao', label: 'Báo cáo', icon: FileText, permission: 'reports' },
+    { to: '/khach-hang', label: 'Khách hàng', icon: ContactRound, permission: 'customers' },
+    { to: '/kpi', label: 'Đánh giá KPI', icon: Target, permission: 'kpi' },
+  ] },
+  { label: 'Hệ thống', items: [{ to: '/phan-quyen', label: 'Phân quyền', icon: ShieldCheck, adminOnly: true }] },
 ];
 
-const NAV_GROUPS = [
-  { label: 'Tổng quan', paths: ['/'] },
-  { label: 'Nhân sự', paths: ['/nhan-vien', '/so-do-to-chuc', '/phong-ban'] },
-  { label: 'Công việc & đánh giá', paths: ['/bao-cao', '/timeline', '/kpi'] },
-  { label: 'Quản trị', paths: ['/phan-quyen'] },
-];
-
-const PERMISSION_BY_PATH = {
-  '/': 'dashboard', '/nhan-vien': 'employees', '/so-do-to-chuc': 'organization',
-  '/phong-ban': 'departments', '/bao-cao': 'reports', '/timeline': 'tasks', '/kpi': 'kpi',
-};
-
-export default function Sidebar() {
+export default function Sidebar({ collapsed = false, mobileOpen = false, onClose = () => {}, onOpen = () => {}, onToggle = () => {}, alertsCount = 0 }) {
   const { user, logout, can } = useAuth();
   const pathname = usePathname();
-
-  return (
-    <aside className="w-64 shrink-0 h-screen sticky top-0 flex flex-col bg-[#effaff] text-ink border-r border-[#d4e8ee]">
-      <div className="px-6 py-6 border-b border-[#d4e8ee] flex flex-col items-start text-left">
-        <Link href="/" aria-label="Trang chủ" className="inline-block focus-ring rounded-xl"><Image src="/otis-logo.svg" alt="Logo" width={88} height={88} priority /></Link>
-        <div className="text-xs text-slate mt-2">Hệ thống quản lý nhân sự</div>
-      </div>
-
-      <nav className="flex-1 overflow-y-auto px-3 py-4" aria-label="Điều hướng chính">
-        {NAV_GROUPS.map((group) => {
-          const items = NAV_ITEMS.filter((item) => group.paths.includes(item.to) &&
-            (!item.adminOnly || user?.role === 'admin') &&
-            (item.adminOnly || can(PERMISSION_BY_PATH[item.to])));
-          if (items.length === 0) return null;
-          return <div key={group.label} className="mb-4 last:mb-0">
-            <div className="px-3 pb-1.5 pt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate">{group.label}</div>
-            <div className="flex flex-col gap-0.5">{items.map(({ to, label, icon: Icon, exact }) => {
-              const isActive = exact ? pathname === to : pathname.startsWith(to);
-              return <Link key={to} href={to} aria-current={isActive ? 'page' : undefined}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors focus-ring ${isActive ? 'bg-teal text-white font-medium' : 'text-ink/75 hover:bg-white/70 hover:text-ink'}`}>
-                <Icon size={17} strokeWidth={2} />{label}
-              </Link>;
-            })}</div>
-          </div>;
-        })}
-      </nav>
-
-      <div className="px-3 py-4 border-t border-[#d4e8ee]">
-        <Link href="/ho-so" aria-label="Xem hồ sơ của tôi" aria-current={pathname === '/ho-so' ? 'page' : undefined} className={`flex items-center gap-3 px-3 py-2 rounded-md transition-colors focus-ring ${pathname === '/ho-so' ? 'bg-white/80' : 'hover:bg-white/70'}`}>
-          <Avatar name={user?.full_name} color={user?.avatar_color} avatarPath={user?.avatar_path} size={36} />
-          <div className="min-w-0">
-            <div className="text-sm text-ink truncate">{user?.full_name}</div>
-            <div className="text-xs text-slate truncate">
-              {user?.role_label || (user?.role === 'admin' ? 'Quản trị viên' : user?.role === 'director' ? 'Giám đốc' : user?.role === 'manager' ? 'Quản lý' : 'Nhân viên')}
-            </div>
-          </div>
-        </Link>
-        <button
-          onClick={logout}
-          className="mt-2 w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-ink/70 hover:bg-white/70 hover:text-ink transition-colors focus-ring"
-        >
-          <LogOut size={16} />
-          Đăng xuất
-        </button>
-      </div>
-    </aside>
-  );
+  const compact = collapsed && !mobileOpen;
+  return <aside id="app-sidebar" className={`app-sidebar fixed inset-y-0 left-0 z-40 flex flex-col border-r border-[#233957] bg-[#14243d] text-white transition-[width] duration-200 lg:sticky lg:top-0 lg:z-10 lg:h-screen ${mobileOpen ? 'w-64' : 'w-14'} ${compact ? 'lg:w-[76px]' : 'lg:w-64'}`}>
+    <div className={`flex min-h-[84px] items-center border-b border-white/10 ${mobileOpen ? 'justify-between gap-2 px-4' : 'justify-center px-2'} ${compact ? 'lg:justify-center lg:px-2' : 'lg:justify-between lg:gap-2 lg:px-4'}`}>
+      {!compact && <Link href="/" aria-label="HR OTIS – Trang chủ" onClick={onClose} className={`min-w-0 items-center gap-3 rounded-md focus-ring ${mobileOpen ? 'flex' : 'hidden lg:flex'}`}>
+        <Image src="/logo-otisminhchau2.png" alt="" width={40} height={40} priority className="h-10 w-10 shrink-0 rounded-lg bg-white object-contain p-1" />
+        <span className="min-w-0"><strong className="block text-sm font-bold tracking-[0.08em]">HR OTIS</strong><span className="block text-[11px] text-slate-300">Quản trị nhân sự</span></span>
+      </Link>}
+      <button type="button" onClick={() => { if (window.matchMedia('(min-width: 1024px)').matches) onToggle(); else if (mobileOpen) onClose(); else onOpen(); }} aria-controls="app-sidebar" aria-label="Điều khiển thanh bên" title={mobileOpen ? 'Đóng thanh bên' : compact ? 'Mở rộng thanh bên' : 'Mở hoặc thu gọn thanh bên'} className="icon-button shrink-0 focus-ring" style={{ color: '#fff' }}>
+        <span className="lg:hidden">{mobileOpen ? <X size={20} /> : <Menu size={20} />}</span>
+        <span className="hidden lg:inline-flex">{compact ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}</span>
+      </button>
+    </div>
+    <nav className={`flex-1 space-y-5 overflow-y-auto px-3 py-5 ${mobileOpen ? '' : 'max-lg:hidden'}`} aria-label="Điều hướng chính">
+      {groups.map((group) => {
+        const items = group.items.filter((item) => item.adminOnly ? user?.role === 'admin' : can(item.permission));
+        if (!items.length) return null;
+        return <div key={group.label}>
+          {!compact && <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#a7b8d0]">{group.label}</div>}
+          {compact && <div className="mx-3 mb-2 border-t border-white/10" />}
+          <div className="space-y-1">{items.map(({ to, label, icon: Icon }) => {
+            const active = to === '/' ? pathname === '/' : pathname.startsWith(to);
+            return <Link key={to} href={to} title={compact ? label : undefined} aria-label={compact ? label : undefined} aria-current={active ? 'page' : undefined} onClick={onClose}
+              className={`relative flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors focus-ring ${compact ? 'justify-center' : ''} ${active ? 'bg-[#294368] text-white shadow-[inset_3px_0_0_#78a8f2]' : 'text-[#d4dfed] hover:bg-white/10 hover:text-white'}`}>
+              <Icon size={18} className="shrink-0" strokeWidth={1.9} />
+              {!compact && <span className="truncate">{label}</span>}
+              {to === '/timeline' && alertsCount > 0 && !compact && <span className="ml-auto rounded-full bg-[#bf3f4f] px-1.5 text-[10px] font-bold text-white">{alertsCount}</span>}
+            </Link>;
+          })}</div>
+        </div>;
+      })}
+    </nav>
+    <div className={`border-t border-white/10 p-3 ${mobileOpen ? '' : 'max-lg:hidden'}`}>
+      <button type="button" onClick={logout} title={compact ? 'Đăng xuất' : undefined} aria-label={compact ? 'Đăng xuất' : undefined} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[#d4dfed] hover:bg-white/10 hover:text-white focus-ring ${compact ? 'justify-center' : ''}`}>
+        <LogOut size={18} />{!compact && 'Đăng xuất'}
+      </button>
+    </div>
+  </aside>;
 }
