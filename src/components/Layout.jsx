@@ -41,10 +41,10 @@ export default function Layout({ title, subtitle, actions, children }) {
     localStorage.setItem('hr-sidebar-collapsed', String(!current));
     return !current;
   });
-  return <div className="app-shell flex min-h-screen w-full min-w-0 max-w-full bg-paper max-sm:overflow-x-clip">
+  return <div className="app-shell min-h-screen w-full max-w-full overflow-x-clip bg-paper lg:flex">
     {mobileOpen && <button type="button" aria-label="Đóng menu" className="fixed inset-0 z-30 bg-ink/50 lg:hidden" onClick={() => setMobileOpen(false)} />}
     <Sidebar collapsed={collapsed} mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} onToggle={toggleCollapsed} alertsCount={alerts.length} />
-    <div className="min-w-0 max-w-full flex-1">
+    <div className="w-full min-w-0 max-w-full lg:flex-1">
       <header className="app-header sticky top-0 z-20 flex min-h-[76px] items-center justify-between gap-3 border-b border-line bg-white/95 px-4 backdrop-blur sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center gap-3">
           <button type="button" aria-label="Mở menu" aria-controls="app-sidebar" aria-expanded={mobileOpen} onClick={() => { setNotificationsOpen(false); setMobileOpen(true); }} className="icon-button shrink-0 focus-ring lg:hidden"><Menu size={20} /></button>
@@ -70,7 +70,7 @@ export default function Layout({ title, subtitle, actions, children }) {
           </Link>
         </div>
       </header>
-      <main className="app-main mx-auto w-full min-w-0 max-w-[1800px] px-0 py-5 sm:px-6 sm:py-6 lg:px-8">
+      <main className="app-main mx-auto w-full min-w-0 max-w-[1800px] px-3 py-5 sm:px-6 sm:py-6 lg:px-8">
         {actions && <div className="mb-5 flex flex-wrap items-center justify-end gap-2">{actions}</div>}
         {children}
       </main>
