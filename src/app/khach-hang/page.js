@@ -44,7 +44,7 @@ function CustomersContent() {
       else await api.post('/customers', form);
       setEditing(null);
       load();
-      setNotice(editing.id ? 'Đã cập nhật khách hàng.' : 'Đã thêm khách hàng.');
+      setNotice(editing.id ? 'Đã cập nhật khách hàng.' : 'Đã thêm khách hàng');
     } catch (err) { setError(err.response?.data?.error || 'Không lưu được khách hàng'); }
     finally { setSaving(false); }
   };
