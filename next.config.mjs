@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  distDir: process.env.OTIS_DIST_DIR || '.next',
   async headers() {
     return [{
       source: '/:path*',

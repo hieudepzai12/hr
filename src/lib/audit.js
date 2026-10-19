@@ -1,4 +1,6 @@
 export function changedFields(before = {}, after = {}) {
+  before ??= {};
+  after ??= {};
   const changes = {};
   for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
     if (JSON.stringify(before[key] ?? null) !== JSON.stringify(after[key] ?? null)) {

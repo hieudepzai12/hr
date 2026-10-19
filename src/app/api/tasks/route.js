@@ -6,6 +6,7 @@ import { parsePagination, pagedResult, appendPagination } from '@/lib/pagination
 import { validateTaskInput } from '@/lib/validate-task';
 import { deadlineAlert } from '@/lib/deadline';
 import { writeAudit } from '@/lib/audit';
+import { validateTaskProject } from '@/lib/project-access';
 
 export const GET = withAuth(async (req, ctx, user) => {
   const { searchParams } = new URL(req.url);
@@ -31,11 +32,12 @@ export const GET = withAuth(async (req, ctx, user) => {
     sql += ` AND (t.assignee_id=$1 OR EXISTS
       (SELECT 1 FROM task_collaborators tc WHERE tc.task_id=t.id AND tc.employee_id=$1))`;
   }
-  for (const [key, column] of Object.entries({ assignee_id: 't.assignee_id', department_id: 't.department_id', customer_id: 't.customer_id', status: 't.status', business_group: 't.business_group' })) {
+  for (const [key, column] of Object.entries({ assignee_id: 't.assignee_id', department_id: 't.department_id', customer_id: 't.customer_id', project_id: 't.project_id', status: 't.status', business_group: 't.business_group' })) {
     const value = searchParams.get(key);
     if (value) { params.push(value); sql += ` AND ${column}=$${params.length}`; }
   }
   if (searchParams.get('from')) { params.push(searchParams.get('from')); sql += ` AND t.due_date >= $${params.length}`; }
+  if(searchParams.get('mine')==='1'){params.push(user.id);sql+=` AND (t.assignee_id=$${params.length} OR EXISTS(SELECT 1 FROM task_collaborators tc_mine WHERE tc_mine.task_id=t.id AND tc_mine.employee_id=$${params.length}))`;}
   if (searchParams.get('to')) { params.push(searchParams.get('to')); sql += ` AND t.due_date <= $${params.length}`; }
   sql = appendPagination(sql + ' ORDER BY t.due_date ASC NULLS LAST, t.id DESC', params, pagination);
   const { rows } = await query(sql, params);
@@ -54,6 +56,8 @@ export const POST = withAuth(async (req, ctx, user) => {
     return NextResponse.json({ error: 'Cần chọn phòng ban hợp lệ' }, { status: 400 });
   }
   if (!scopeAllows(user, 'tasks', 'create', { ownerId: assigneeId, departmentId })) return forbidden();
+  const projectError = await validateTaskProject(user,body.project_id,departmentId,body.customer_id);
+  if(projectError)return NextResponse.json({error:projectError},{status:400});
   if (scopeFor(user, 'tasks', 'create') === 'department' && Number(assignee.department_id) !== departmentId) return forbidden();
   if (body.customer_id) {
     const customer = await queryOne("SELECT 1 FROM customers WHERE id=$1 AND status='active'", [body.customer_id]);
@@ -71,12 +75,12 @@ export const POST = withAuth(async (req, ctx, user) => {
   const task = await transaction(async (client) => {
     const { rows } = await client.query(`INSERT INTO tasks
       (title, description, assignee_id, created_by, status, priority, start_date, due_date, progress,
-      customer_id, department_id, business_group, data_period, expected_outcome, planned_progress_date, planned_progress)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
+      customer_id, department_id, business_group, data_period, expected_outcome, planned_progress_date, planned_progress, project_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
     [body.title.trim(), body.description || null, assigneeId, user.id, body.status || 'todo', body.priority || 'medium',
       body.start_date || null, body.due_date || null, Number(body.progress || 0), body.customer_id || null, departmentId || null,
       body.business_group || null, body.data_period || null, body.expected_outcome || null,
-      body.planned_progress_date || null, body.planned_progress === '' ? null : body.planned_progress ?? null]);
+      body.planned_progress_date || null, body.planned_progress === '' ? null : body.planned_progress ?? null, body.project_id || null]);
     for (const employeeId of collaborators) {
       await client.query('INSERT INTO task_collaborators (task_id, employee_id) VALUES ($1,$2)', [rows[0].id, employeeId]);
     }

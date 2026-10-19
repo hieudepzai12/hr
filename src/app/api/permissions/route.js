@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { withAuth } from '@/lib/auth';
 import { MODULES, ORGANIZATION_SCOPES, SCOPED_MODULES, DATA_ACTIONS, DATA_SCOPES } from '@/lib/permissions';
-import { listRoles, roleExists } from '@/lib/role-permissions';
+import { listRoles, roleExists, getRolePermissions } from '@/lib/role-permissions';
+import { NEW_MODULES } from '@/lib/governance-config';
 import { randomUUID } from 'node:crypto';
 import { writeAudit } from '@/lib/audit';
 
@@ -33,7 +34,15 @@ export const POST = withAuth(async (req, ctx, user) => {
 }, { roles: ['admin'] });
 
 export const PUT = withAuth(async (req, ctx, user) => {
-  const { role, label, permissions } = await req.json();
+  const { role, label, permissions: submittedPermissions } = await req.json();
+  // Older clients may omit newly introduced modules. Preserve their stored grants.
+  const previousPermissions = typeof role === 'string' ? await getRolePermissions(role) : {};
+  const permissions = submittedPermissions && typeof submittedPermissions === 'object' && !Array.isArray(submittedPermissions)
+    ? { ...Object.fromEntries(NEW_MODULES.filter(([key]) => !Object.hasOwn(submittedPermissions,key)).map(([key]) => [key,previousPermissions[key]])), ...submittedPermissions } : submittedPermissions;
+  if(permissions&&typeof permissions==='object'&&!Object.hasOwn(permissions,'profiles'))permissions.profiles=previousPermissions.profiles;
+  if(permissions?.profiles&&(!['none','self','department','all'].includes(permissions.profiles.scopes?.view)||permissions.profiles.manage||DATA_ACTIONS.some(action=>action!=='view'&&permissions.profiles.scopes?.[action]!=='none'))){
+    return NextResponse.json({error:'Phạm vi xem Profile nhân sự không hợp lệ.'},{status:400});
+  }
   const keys = MODULES.map(([key]) => key);
   if (!await roleExists(role) || role === 'admin' || !permissions ||
       typeof permissions !== 'object' || Array.isArray(permissions) ||

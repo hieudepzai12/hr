@@ -3,29 +3,35 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { LayoutGrid, Users, Building2, Network, FileText, CalendarClock, Target, LogOut, ShieldCheck, ContactRound, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
+import { useState } from 'react';
+import { LogOut, PanelLeftClose, PanelLeftOpen, X, ChevronDown, ChevronRight } from 'lucide-react';
+import { visibleNavigation, navigationActive } from '@/lib/navigation';
 import { useAuth } from '@/context/AuthContext';
 
-const groups = [
-  { label: 'Tổng quan', items: [{ to: '/', label: 'Tổng quan', icon: LayoutGrid, permission: 'dashboard' }] },
-  { label: 'Nhân sự', items: [
-    { to: '/nhan-vien', label: 'Nhân viên', icon: Users, permission: 'employees' },
-    { to: '/so-do-to-chuc', label: 'Sơ đồ tổ chức', icon: Network, permission: 'organization' },
-    { to: '/phong-ban', label: 'Phòng ban', icon: Building2, permission: 'departments' },
-  ] },
-  { label: 'Điều hành công việc', items: [
-    { to: '/timeline', label: 'Công việc & Deadline', icon: CalendarClock, permission: 'tasks' },
-    { to: '/bao-cao', label: 'Báo cáo', icon: FileText, permission: 'reports' },
-    { to: '/khach-hang', label: 'Khách hàng', icon: ContactRound, permission: 'customers' },
-    { to: '/kpi', label: 'Đánh giá KPI', icon: Target, permission: 'kpi' },
-  ] },
-  { label: 'Hệ thống', items: [{ to: '/phan-quyen', label: 'Phân quyền', icon: ShieldCheck, adminOnly: true }] },
-];
+function SidebarItem({ item, pathname, compact, onClose, onToggle }) {
+  const [expanded, setExpanded] = useState(true);
+  const Icon = item.icon;
+  const active = navigationActive(item, pathname);
+  const className = `relative flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-[13px] font-medium transition-colors focus-ring ${compact ? 'justify-center' : ''} ${active ? 'bg-[#294368] text-white' : 'text-[#d4dfed] hover:bg-white/10 hover:text-white'}`;
+  if (item.children) return <div>
+    <button type="button" className={className} title={compact ? item.label : undefined} aria-label={compact ? item.label : undefined} aria-expanded={!compact && expanded} aria-controls="organization-submenu" onClick={() => { if (compact) { onToggle(); setExpanded(true); } else setExpanded(!expanded); }}>
+      <Icon size={18} className="shrink-0" />
+      {!compact && <><span className="min-w-0 flex-1">{item.label}</span>{expanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</>}
+    </button>
+    {!compact && expanded && <div id="organization-submenu" className="ml-5 mt-1 space-y-1 border-l border-white/15 pl-2">
+      {item.children.map(child => <SidebarItem key={child.to} item={child} pathname={pathname} compact={false} onClose={onClose} onToggle={onToggle} />)}
+    </div>}
+  </div>;
+  return <Link href={item.to} title={compact ? item.label : undefined} aria-label={compact ? item.label : undefined} aria-current={active ? 'page' : undefined} onClick={onClose} className={`${className} ${active ? 'shadow-[inset_3px_0_0_#78a8f2]' : ''}`}>
+    <Icon size={18} className="shrink-0" strokeWidth={1.9} />{!compact && <span className="min-w-0">{item.label}</span>}
+  </Link>;
+}
 
 export default function Sidebar({ collapsed = false, mobileOpen = false, onClose = () => {}, onToggle = () => {} }) {
   const { user, logout, can } = useAuth();
   const pathname = usePathname();
   const compact = collapsed && !mobileOpen;
+  const groups = visibleNavigation(user, can);
   return <aside id="app-sidebar" className={`app-sidebar fixed inset-y-0 left-0 z-40 flex w-[min(16rem,100vw)] flex-col border-r border-[#233957] bg-[#14243d] text-white transition-[width,transform] duration-200 lg:sticky lg:top-0 lg:z-10 lg:h-screen lg:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full max-lg:invisible'} ${compact ? 'lg:w-[76px]' : 'lg:w-64'}`}>
     <div className={`flex min-h-[84px] items-center border-b border-white/10 ${mobileOpen ? 'justify-between gap-2 px-4' : 'justify-center px-2'} ${compact ? 'lg:justify-center lg:px-2' : 'lg:justify-between lg:gap-2 lg:px-4'}`}>
       {!compact && <Link href="/" aria-label="HR OTIS – Trang chủ" onClick={onClose} className={`min-w-0 items-center gap-3 rounded-md focus-ring ${mobileOpen ? 'flex' : 'hidden lg:flex'}`}>
@@ -39,19 +45,12 @@ export default function Sidebar({ collapsed = false, mobileOpen = false, onClose
     </div>
     <nav className={`flex-1 space-y-5 overflow-y-auto px-3 py-5 ${mobileOpen ? '' : 'max-lg:hidden'}`} aria-label="Điều hướng chính">
       {groups.map((group) => {
-        const items = group.items.filter((item) => item.adminOnly ? user?.role === 'admin' : can(item.permission));
+        const items = group.items;
         if (!items.length) return null;
         return <div key={group.label}>
           {!compact && <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#a7b8d0]">{group.label}</div>}
           {compact && <div className="mx-3 mb-2 border-t border-white/10" />}
-          <div className="space-y-1">{items.map(({ to, label, icon: Icon }) => {
-            const active = to === '/' ? pathname === '/' : pathname.startsWith(to);
-            return <Link key={to} href={to} title={compact ? label : undefined} aria-label={compact ? label : undefined} aria-current={active ? 'page' : undefined} onClick={onClose}
-              className={`relative flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors focus-ring ${compact ? 'justify-center' : ''} ${active ? 'bg-[#294368] text-white shadow-[inset_3px_0_0_#78a8f2]' : 'text-[#d4dfed] hover:bg-white/10 hover:text-white'}`}>
-              <Icon size={18} className="shrink-0" strokeWidth={1.9} />
-              {!compact && <span className="truncate">{label}</span>}
-            </Link>;
-          })}</div>
+          <div className="space-y-1">{items.map(item => <SidebarItem key={item.to || item.label} item={item} pathname={pathname} compact={compact} onClose={onClose} onToggle={onToggle} />)}</div>
         </div>;
       })}
     </nav>

@@ -1,0 +1,46 @@
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import pg from 'pg';
+import jwt from 'jsonwebtoken';
+import {defaultPermissions} from '../src/lib/permissions.js';
+if(!process.env.DATABASE_URL)process.loadEnvFile('.env.local');
+const url=process.env.DATABASE_URL,base=process.env.PROFILE_TEST_URL||'http://localhost:3000';
+if(!url||!['localhost','127.0.0.1','[::1]'].includes(new URL(url).hostname)||!['localhost','127.0.0.1'].includes(new URL(base).hostname))throw new Error('Local checks only');
+const client=new pg.Client({connectionString:url});const suffix=randomUUID().replaceAll('-','');
+const role=`custom_profile_test_${suffix}`;let fixtureId;
+try{
+ await client.connect();
+ const admin=(await client.query("SELECT id,token_version FROM employees WHERE role='admin' AND status='active' LIMIT 1")).rows[0];
+ const other=(await client.query("SELECT id,department_id FROM employees WHERE role<>'admin' AND status='active' AND department_id IS NOT NULL LIMIT 1")).rows[0];
+ const permissions=defaultPermissions(role);permissions.profiles.scopes.view='self';permissions.profiles.view=true;
+ await client.query('INSERT INTO role_permissions(role,label,permissions) VALUES($1,$2,$3::jsonb)',[role,`Profile test ${suffix}`,JSON.stringify(permissions)]);
+ const fixture=(await client.query("INSERT INTO employees(full_name,email,password_hash,role) VALUES($1,$2,$3,$4) RETURNING id,token_version",['Profile access fixture',`${suffix}@example.invalid`,'!unusable',role])).rows[0];fixtureId=fixture.id;
+ const request=(user,path,method='GET',body)=>fetch(base+path,{method,headers:{Cookie:'hr_session='+jwt.sign({id:user.id,ver:user.token_version},process.env.JWT_SECRET,{expiresIn:'5m'}),'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
+ let response=await request(fixture,'/api/profiles?limit=20');assert.equal(response.status,200);assert.deepEqual((await response.json()).items.map(e=>e.id),[fixtureId]);
+ response=await request(fixture,`/api/profiles/${fixtureId}`);assert.equal(response.status,200);const own=await response.json();assert(!('password_hash' in own));assert(!('token_version' in own));
+ assert.equal((await request(fixture,`/api/profiles/${other.id}`)).status,404);
+ assert.equal((await request(fixture,`/api/employees/${fixtureId}`)).status,403,'Profile view must work without employee-list permission');
+ permissions.profiles.scopes.view='all';
+ response=await request(admin,'/api/permissions','PUT',{role,permissions});assert.equal(response.status,200);
+ assert.equal((await request(fixture,`/api/profiles/${other.id}`)).status,200,'Admin-granted full scope');
+ permissions.profiles.scopes.view='department';assert.equal((await request(admin,'/api/permissions','PUT',{role,permissions})).status,200);
+ await client.query('UPDATE employees SET department_id=$1 WHERE id=$2',[other.department_id,fixtureId]);
+ assert.equal((await request(fixture,`/api/profiles/${other.id}`)).status,200);
+ const expected=(await client.query('SELECT id FROM employees WHERE department_id=$1',[other.department_id])).rows.map(r=>r.id).sort((a,b)=>a-b);
+ response=await request(fixture,'/api/profiles?limit=100&department_id=999999');assert.equal(response.status,200);
+ assert.deepEqual((await response.json()).items.map(r=>r.id).sort((a,b)=>a-b),expected,'Department filter cannot override server scope');
+ assert.equal((await request(fixture,`/api/profiles/${admin.id}`)).status,404);
+ await client.query('UPDATE employees SET department_id=NULL WHERE id=$1',[fixtureId]);
+ assert.deepEqual(await (await request(fixture,'/api/profiles')).json(),[]);
+ assert.equal((await request(fixture,`/api/profiles/${other.id}`)).status,404);
+ permissions.profiles.scopes.view='selected';assert.equal((await request(admin,'/api/permissions','PUT',{role,permissions})).status,400);
+ permissions.profiles.scopes.view='none';permissions.profiles.view=false;
+ assert.equal((await request(admin,'/api/permissions','PUT',{role,permissions})).status,200);
+ assert.equal((await request(fixture,'/api/profiles')).status,403);
+ assert.equal((await request(fixture,`/api/profiles/${fixtureId}`)).status,403);
+ assert.equal((await fetch(base+'/api/profiles')).status,401);
+ console.log('PASS: self-only list/detail, cross-user denial, independent employee permission, admin scope changes, full access, revoked access, invalid scope and anonymous rejection');
+}finally{
+ if(fixtureId)await client.query('DELETE FROM employees WHERE id=$1',[fixtureId]);
+ await client.query('DELETE FROM role_permissions WHERE role=$1',[role]);await client.end();
+}

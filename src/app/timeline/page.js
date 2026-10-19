@@ -34,6 +34,7 @@ function TimelineContent() {
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [projects,setProjects]=useState([]);
   const [editing, setEditing] = useState(null);
   const [importOpen, setImportOpen] = useState(false);
   const [printPayload, setPrintPayload] = useState(null);
@@ -46,9 +47,10 @@ function TimelineContent() {
   const { items: tasks, hasMore, loading, loadingMore, error: listError, refresh, loadMore } = usePagedList('/tasks', filters);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const initial = Object.fromEntries(['status', 'from', 'to', 'department_id', 'assignee_id', 'customer_id'].filter((key) => params.get(key)).map((key) => [key, params.get(key)]));
+    const initial = Object.fromEntries(['status', 'from', 'to', 'department_id', 'assignee_id', 'customer_id','project_id','mine'].filter((key) => params.get(key)).map((key) => [key, params.get(key)]));
     if (Object.keys(initial).length) queueMicrotask(() => setFilters(initial));
   }, []);
+  useEffect(()=>{if(scopeFor(user,'projects','view')==='none')return;api.get('/governance/projects',{params:{options:1}}).then(({data})=>setProjects(data.projects||[])).catch(()=>{});},[user]);
   useEffect(() => {
     api.get('/employees', { params: { fields: 'options', status: 'active' } }).then(({ data }) => setEmployees(data)).catch(() => {});
     api.get('/departments').then(({ data }) => setDepartments(data)).catch(() => {});
@@ -127,12 +129,14 @@ function TimelineContent() {
   return <Layout title="Timeline & Deadline" subtitle="Công việc gốc và tiến độ theo từng người"
     actions={<div className="flex flex-wrap gap-2">{scopeFor(user, 'tasks', 'print') !== 'none' && <button type="button" disabled={printing || filters.deleted === '1'} onClick={printPlan} title={filters.deleted === '1' ? 'Tắt chế độ xem công việc đã xóa để in' : 'In mọi công việc trong phạm vi quyền và bộ lọc hiện tại'} className="ui-button ui-button-secondary">{printing ? 'Đang tạo bản in...' : 'In kế hoạch công việc'}</button>}{scopeFor(user, 'tasks', 'create') !== 'none' && <><button onClick={() => setImportOpen(true)} className="ui-button ui-button-secondary">Nhập Excel</button><button onClick={openCreate} className="ui-button ui-button-primary">Giao việc mới</button></>}</div>}>
     <div className="ui-card mb-4 p-4">
+      <div className="mb-3 flex flex-wrap gap-2"><button type="button" aria-pressed={filters.mine!=='1'} onClick={()=>setFilter('mine','')} className={`ui-button ${filters.mine!=='1'?'ui-button-primary':'ui-button-secondary'}`}>Trong phạm vi quyền</button><button type="button" aria-pressed={filters.mine==='1'} onClick={()=>setFilter('mine','1')} className={`ui-button ${filters.mine==='1'?'ui-button-primary':'ui-button-secondary'}`}>Phần việc của tôi</button></div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h2 className="text-sm font-semibold">Danh sách công việc</h2><p className="text-xs text-slate">Theo phạm vi bạn được xem và xử lý</p></div><div className="flex rounded-lg border border-line bg-paper p-1" role="group" aria-label="Chế độ xem"><button onClick={() => setView('board')} aria-pressed={view === 'board'} className={`rounded-md px-3 py-1.5 text-xs font-semibold ${view === 'board' ? 'bg-white text-ink shadow-sm' : 'text-slate'}`}> Tiến độ</button><button onClick={() => setView('table')} aria-pressed={view === 'table'} className={`rounded-md px-3 py-1.5 text-xs font-semibold ${view === 'table' ? 'bg-white text-ink shadow-sm' : 'text-slate'}`}>Bảng</button></div></div>
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
       <input aria-label="Tìm trong công việc đã tải" placeholder="Tìm công việc đã tải" value={search} onChange={(event) => setSearch(event.target.value)} className="ui-field lg:col-span-2" />
       <select aria-label="Lọc phòng ban" value={filters.department_id || ''} onChange={(event) => setFilter('department_id', event.target.value)} className={inputClass}><option value="">Mọi phòng ban</option>{departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select>
       <select aria-label="Lọc nhân viên" value={filters.assignee_id || ''} onChange={(event) => setFilter('assignee_id', event.target.value)} className={inputClass}><option value="">Mọi nhân viên</option>{employees.map((e) => <option key={e.id} value={e.id}>{e.full_name}</option>)}</select>
       <select aria-label="Lọc khách hàng" value={filters.customer_id || ''} onChange={(event) => setFilter('customer_id', event.target.value)} className={inputClass}><option value="">Mọi khách hàng</option>{customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+      {scopeFor(user,'projects','view')!=='none'&&<select aria-label="Lọc dự án" value={filters.project_id||''} onChange={e=>setFilter('project_id',e.target.value)} className={inputClass}><option value="">Mọi dự án</option>{projects.map(project=><option key={project.id} value={project.id}>{project.name}</option>)}</select>}
       <select aria-label="Lọc trạng thái" value={filters.status || ''} onChange={(event) => setFilter('status', event.target.value)} className={inputClass}><option value="">Mọi trạng thái</option>{columns.map((column) => <option key={column.key} value={column.key}>{column.label}</option>)}</select>
       <input aria-label="Hạn từ ngày" type="date" value={filters.from || ''} onChange={(event) => setFilter('from', event.target.value)} className={inputClass} />
       <input aria-label="Hạn đến ngày" type="date" value={filters.to || ''} onChange={(event) => setFilter('to', event.target.value)} className={inputClass} />
@@ -155,6 +159,7 @@ function TimelineContent() {
           <label className="text-sm sm:col-span-2">Tên công việc<span className="required-mark">*</span><input required maxLength={500} value={form.title || ''} onChange={(e) => setForm({ ...form, title: e.target.value })} className={inputClass} /></label>
           <label className="text-sm sm:col-span-2">Mô tả<textarea rows={3} value={form.description || ''} onChange={(e) => setForm({ ...form, description: e.target.value })} className={inputClass} /></label>
           <label className="text-sm">Khách hàng<select value={form.customer_id || ''} onChange={(e) => setForm({ ...form, customer_id: e.target.value })} className={inputClass}><option value="">Không có</option>{customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+          {scopeFor(user,'projects','view')!=='none'&&<label className="text-sm">Dự án<select value={form.project_id||''} onChange={e=>setForm({...form,project_id:e.target.value})} className={inputClass}><option value="">Không có</option>{projects.map(project=><option key={project.id} value={project.id}>{project.name}</option>)}</select></label>}
           <label className="text-sm">Ưu tiên<select value={form.priority || 'medium'} onChange={(e) => setForm({ ...form, priority: e.target.value })} className={inputClass}><option value="low">Thấp</option><option value="medium">Trung bình</option><option value="high">Cao</option><option value="urgent">Khẩn cấp</option></select></label>
           {textFields.map(([key, label]) => <label key={key} className="text-sm">{label}<input value={form[key] || ''} onChange={(e) => setForm({ ...form, [key]: e.target.value })} className={inputClass} /></label>)}
         </div></fieldset>

@@ -6,6 +6,7 @@ import { canViewTask, canEditTask, isTaskParticipant } from '@/lib/task-access';
 import { validateTaskInput } from '@/lib/validate-task';
 import { writeAudit } from '@/lib/audit';
 import { deadlineAlert } from '@/lib/deadline';
+import { validateTaskProject } from '@/lib/project-access';
 
 export const GET = withAuth(async (req, { params }, user) => {
   const { id } = await params;
@@ -35,7 +36,7 @@ export const PUT = withAuth(async (req, { params }, user) => {
   const canEdit = canEditTask(before, user);
   const participant = await isTaskParticipant(before, user.id);
   if (!canEdit && (!participant || scopeFor(user, 'tasks', 'edit') === 'none')) return forbidden();
-  const managerFields = ['title', 'description', 'assignee_id', 'department_id', 'customer_id', 'business_group',
+  const managerFields = ['title', 'description', 'assignee_id', 'department_id', 'customer_id', 'project_id', 'business_group',
     'data_period', 'expected_outcome', 'priority', 'start_date', 'due_date', 'planned_progress_date',
     'planned_progress', 'collaborator_ids', 'leader_opinion'];
   if (before.status === 'done' && (body.status !== undefined || body.progress !== undefined)) {
@@ -55,9 +56,16 @@ export const PUT = withAuth(async (req, { params }, user) => {
   }
   const assigneeId = Number(body.assignee_id || before.assignee_id);
   const departmentId = Number(body.department_id || before.department_id);
+  const normalizedId=(value)=>value===null||value===''?null:Number(value);
+  const changedLink=body.project_id!==undefined&&normalizedId(body.project_id)!==normalizedId(before.project_id);
+  const changedContext=before.project_id&&((body.department_id!==undefined&&normalizedId(body.department_id)!==normalizedId(before.department_id))||(body.customer_id!==undefined&&normalizedId(body.customer_id)!==normalizedId(before.customer_id)));
+  if(changedLink || changedContext){
+    const projectError=await validateTaskProject(user,body.project_id===undefined?before.project_id:body.project_id,departmentId,body.customer_id===undefined?before.customer_id:body.customer_id);
+    if(projectError)return NextResponse.json({error:projectError},{status:400});
+  }
   if (canEdit && !scopeAllows(user, 'tasks', 'edit', { ownerId: assigneeId, departmentId })) return forbidden();
   const after = await transaction(async (client) => {
-    const cols = canEdit ? ['title', 'description', 'assignee_id', 'department_id', 'customer_id', 'business_group',
+    const cols = canEdit ? ['title', 'description', 'assignee_id', 'department_id', 'customer_id', 'project_id', 'business_group',
       'data_period', 'expected_outcome', 'priority', 'start_date', 'due_date', 'planned_progress_date',
       'planned_progress'] : [];
     if (participant) cols.push('status', 'progress');

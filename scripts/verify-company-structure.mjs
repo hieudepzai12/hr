@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';
+import {departmentStructure,isCompanyLeader,subordinateCount} from '../src/lib/company-structure.js';
+
+const leader={id:1,role:'employee',position:'Giám đốc',department_id:1};
+const manager={id:2,role:'employee',position:'Trưởng nhóm kế toán tổng hợp',department_id:2,manager_id:1};
+const staff={id:3,role:'director',position:null,department_id:2,manager_id:2};
+assert.equal(isCompanyLeader(leader),true,'Business title must work without granting director permissions');
+assert.equal(isCompanyLeader(staff),false,'A login role must not fabricate a business title');
+assert.equal(isCompanyLeader({...leader,position:'Phó giám đốc tài chính'}),false,'Deputy must not become company director');
+const structure=departmentStructure([leader,manager,staff],2);
+assert.equal(structure.count,2);
+assert.equal(structure.roots[0].title,manager.position);
+assert.equal(structure.roots[0].children[0].title,null);
+assert.equal(structure.roots[0].children[0].id,staff.id);
+assert.equal(subordinateCount(structure.roots[0]),1,'Do not count the manager');
+assert.equal(subordinateCount({id:10,children:[{id:11,children:[{id:12,children:[]}]}]}),2,'Include lower reporting levels');
+assert.equal(subordinateCount({id:10,children:[]}),0);
+assert(!JSON.stringify(structure).includes('full_name'));
+assert.equal(departmentStructure([leader,manager,staff],99).count,0);
+const cyclic=departmentStructure([{...manager,manager_id:3},{...staff,manager_id:2}],2);
+assert.equal(cyclic.unresolved,2);
+assert.equal(cyclic.roots.length,2);
+console.log('PASS: actual business titles, management hierarchy, missing data, privacy, empty departments and cycles');

@@ -1,5 +1,9 @@
-import { Pool } from 'pg';
+import { Pool, types } from 'pg';
 import bcrypt from 'bcryptjs';
+import { migrateGovernance } from './migrations/005-governance.js';
+import { migrateAuditEntityText } from './migrations/006-audit-entity-text.js';
+// DATE has no timezone; preserve yyyy-mm-dd rather than converting through local midnight.
+types.setTypeParser(1082, (value) => value);
 
 // Cache pool trên `global` để tránh mở nhiều kết nối khi Next.js hot-reload
 // (dev) hoặc khi nhiều serverless function invocations dùng chung module (Vercel).
@@ -82,12 +86,14 @@ export async function queryOne(text, params) {
 }
 
 let schemaReadyPromise = null;
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 6;
 
 /** Đảm bảo bảng đã được tạo & seed dữ liệu mẫu. Gọi an toàn nhiều lần — chỉ chạy thật sự một lần. */
 export function ensureSchema() {
-  if (!schemaReadyPromise) schemaReadyPromise = (process.env.NODE_ENV === 'production'
-    ? verifySchema().then(rotateDemoAdminPassword)
+  let localDatabase = false;
+  try { localDatabase = ['localhost', '127.0.0.1', '[::1]'].includes(new URL(getConnectionString()).hostname); } catch {}
+  if (!schemaReadyPromise) schemaReadyPromise = (process.env.NODE_ENV === 'production' || !localDatabase
+    ? verifySchema().then(() => process.env.NODE_ENV === 'production' ? rotateDemoAdminPassword() : undefined)
     : migrateSchema()).catch((error) => {
     schemaReadyPromise = null;
     throw error;
@@ -386,7 +392,19 @@ export async function migrateSchema() {
       await seed();
     }
   }
-  await pool.query('INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT (version) DO NOTHING', [SCHEMA_VERSION]);
+  await transaction(async (client) => {
+    await client.query('SELECT pg_advisory_xact_lock(68451205)');
+    const applied = await client.query('SELECT 1 FROM schema_migrations WHERE version=5');
+    if (!applied.rowCount) {
+      await migrateGovernance(client);
+      await client.query('INSERT INTO schema_migrations(version) VALUES (5)');
+    }
+    const auditMigration=await client.query('SELECT 1 FROM schema_migrations WHERE version=6');
+    if(!auditMigration.rowCount){
+      await migrateAuditEntityText(client);
+      await client.query('INSERT INTO schema_migrations(version) VALUES (6)');
+    }
+  });
 }
 
 async function seed() {

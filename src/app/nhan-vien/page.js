@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Plus, Search, Pencil, UserX, Camera, Loader2, KeyRound } from 'lucide-react';
 import api from '@/lib/api';
 import Layout from '@/components/Layout';
@@ -25,6 +25,9 @@ function EmployeesContent() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({});
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const saveLock = useRef(false);
+  const employeeFormId = useId();
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [passwordTarget, setPasswordTarget] = useState(null);
   const [passwordForm, setPasswordForm] = useState({ current_password: '', new_password: '', confirm_password: '' });
@@ -90,18 +93,31 @@ function EmployeesContent() {
 
   const submit = async (e) => {
     e.preventDefault();
+    if (saveLock.current) return;
+    saveLock.current = true;
+    setSaving(true);
     setError('');
     try {
+      const payload = {
+        full_name: form.full_name?.trim(), position: form.position || null,
+        department_id: form.department_id || null, manager_id: form.manager_id || null,
+        phone: form.phone || null, role: form.role || editing?.role || 'employee',
+        status: form.status || editing?.status || 'active', join_date: form.join_date || null,
+      };
       if (editing) {
-        await api.put(`/employees/${editing.id}`, form);
+        await api.put(`/employees/${editing.id}`, payload, { timeout: 20000 });
       } else {
-        await api.post('/employees', form);
+        await api.post('/employees', { ...payload, email: form.email?.trim(), password: form.password }, { timeout: 20000 });
       }
       setModalOpen(false);
+      setNotice(editing ? 'Đã lưu thay đổi thông tin nhân viên.' : 'Đã thêm nhân viên.');
       load();
-      api.get('/employees', { params: { status: 'active', fields: 'options' } }).then(({ data }) => setManagerOptions(data));
+      api.get('/employees', { params: { status: 'active', fields: 'options' } }).then(({ data }) => setManagerOptions(data)).catch(() => setNotice('Đã lưu nhân viên. Vui lòng tải lại trang để cập nhật danh sách quản lý.'));
     } catch (err) {
-      setError(err.response?.data?.error || 'Có lỗi xảy ra');
+      setError(err.response?.data?.error || (err.code === 'ECONNABORTED' ? 'Chưa nhận được phản hồi lưu. Kiểm tra kết nối và tải lại danh sách trước khi thử lại.' : 'Không thể lưu nhân viên. Vui lòng thử lại.'));
+    } finally {
+      saveLock.current = false;
+      setSaving(false);
     }
   };
 
@@ -153,6 +169,7 @@ function EmployeesContent() {
       {!modalOpen && error && <div role="alert" className="mb-4 text-sm text-clay bg-[#F1DAD5] px-3 py-2 rounded-md">{error}</div>}
       {listError && <div role="alert" className="mb-4 text-sm text-clay bg-[#F1DAD5] px-3 py-2 rounded-md">{listError}</div>}
       {notice && <div role="status" className="mb-4 text-sm text-teal bg-[#DEE8D5] px-3 py-2 rounded-md">{notice}</div>}
+      {isManager&&<div className="ui-notice mb-4 text-sm">Để cập nhật sơ đồ, sửa Chức vụ, Phòng ban và Quản lý trực tiếp của nhân viên. Vai trò chỉ dùng phân quyền phần mềm; sơ đồ không tự lấy vai trò làm chức vụ.</div>}
       <div className="relative mb-5 max-w-sm">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate" />
         <input
@@ -224,8 +241,8 @@ function EmployeesContent() {
       <LoadMore hasMore={hasMore} loading={loadingMore} onClick={loadMore} />
 
       {modalOpen && (
-        <Modal title={editing ? 'Chỉnh sửa nhân viên' : 'Thêm nhân viên'} onClose={() => setModalOpen(false)}>
-          <form onSubmit={submit} className="space-y-3.5">
+        <Modal title={editing ? 'Chỉnh sửa nhân viên' : 'Thêm nhân viên'} onClose={() => { if (!saveLock.current) setModalOpen(false); }}>
+          <form id={employeeFormId} onSubmit={submit} onInvalidCapture={(event) => setError(event.target.validationMessage || 'Vui lòng kiểm tra thông tin chưa hợp lệ.')} aria-busy={saving} className="space-y-3.5">
             {editing && (
               <div className="flex items-center gap-3 pb-1">
                 <div className="relative">
@@ -244,7 +261,7 @@ function EmployeesContent() {
               </div>
             )}
             <div>
-              <label className="block text-xs font-medium text-ink mb-1">Họ và tên</label>
+              <label className="block text-xs font-medium text-ink mb-1">Họ và tên *</label>
               <input required value={form.full_name || ''} onChange={(e) => setForm({ ...form, full_name: e.target.value })}
                 className="w-full px-3 py-2 rounded-md border border-line text-sm focus-ring focus:border-teal outline-none" />
             </div>
@@ -267,6 +284,7 @@ function EmployeesContent() {
                 <label className="block text-xs font-medium text-ink mb-1">Chức vụ</label>
                 <input value={form.position || ''} onChange={(e) => setForm({ ...form, position: e.target.value })}
                   className="w-full px-3 py-2 rounded-md border border-line text-sm focus-ring focus:border-teal outline-none" />
+                <p className="mt-1 text-xs text-slate">Chức danh thực tế hiển thị trên sơ đồ.</p>
               </div>
               <div>
                 <label className="block text-xs font-medium text-ink mb-1">Vai trò</label>
@@ -274,6 +292,7 @@ function EmployeesContent() {
                   className="w-full px-3 py-2 rounded-md border border-line text-sm focus-ring focus:border-teal outline-none bg-white">
                   {roles.map((item) => <option key={item.role} value={item.role}>{item.label}</option>)}
                 </select>
+                <p className="mt-1 text-xs text-slate">Quyền đăng nhập, độc lập với chức vụ.</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -321,14 +340,14 @@ function EmployeesContent() {
               )}
             </div>
 
-            {error && <div className="text-sm text-clay bg-[#F1DAD5] px-3 py-2 rounded-md">{error}</div>}
+            {error && <div role="alert" className="text-sm text-clay bg-[#F1DAD5] px-3 py-2 rounded-md">{error}</div>}
 
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 rounded-md text-sm text-slate hover:text-ink transition-colors focus-ring">
+            <div className="sticky bottom-0 z-10 flex justify-end gap-2 border-t border-line bg-white py-3">
+              <button type="button" disabled={saving} onClick={() => setModalOpen(false)} className="px-4 py-2 rounded-md text-sm text-slate hover:text-ink transition-colors focus-ring disabled:opacity-50">
                 Huỷ
               </button>
-              <button type="submit" className="px-4 py-2 rounded-md text-sm font-medium bg-teal hover:bg-teal-dark text-white transition-colors focus-ring">
-                {editing ? 'Lưu thay đổi' : 'Thêm nhân viên'}
+              <button type="submit" form={employeeFormId} disabled={saving || avatarUploading} className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-teal hover:bg-teal-dark text-white transition-colors focus-ring disabled:opacity-50">
+                {saving && <Loader2 size={15} className="animate-spin" />}{saving ? 'Đang lưu...' : editing ? 'Lưu thay đổi' : 'Thêm nhân viên'}
               </button>
             </div>
           </form>

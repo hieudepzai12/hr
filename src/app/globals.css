@@ -50,6 +50,7 @@ textarea:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
 
 .ui-card { background: #fff; border: 1px solid var(--color-line); border-radius: 14px; box-shadow: 0 2px 12px rgb(18 39 72 / 4%); }
 .ui-field { width: 100%; min-height: 40px; border: 1px solid #cbd6e4; border-radius: 8px; background: #fff; padding: 8px 11px; font-size: 14px; color: var(--color-ink); }
+.ui-field.pl-9 { padding-left: 36px; }
 .form-control { width: 100%; min-height: 40px; border: 1px solid #cbd6e4; border-radius: 8px; background: #fff; padding: 8px 11px; font-size: 14px; color: var(--color-ink); }
 .form-label { display: block; margin-bottom: 5px; font-size: 13px; font-weight: 600; color: var(--color-ink); }
 .ui-field:hover { border-color: #9eafc7; }

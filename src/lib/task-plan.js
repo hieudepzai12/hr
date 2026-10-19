@@ -25,8 +25,9 @@ export function buildTaskPlanQuery({ userId, departmentId, viewScope, printScope
   };
   addScope(viewScope);
   addScope(printScope);
+  if(filters.mine==='1')addScope('self');
 
-  for (const [key, column] of Object.entries({ assignee_id: 't.assignee_id', department_id: 't.department_id', customer_id: 't.customer_id' })) {
+  for (const [key, column] of Object.entries({ assignee_id: 't.assignee_id', department_id: 't.department_id', customer_id: 't.customer_id', project_id: 't.project_id' })) {
     if (!filters[key]) continue;
     const id = Number(filters[key]);
     if (!Number.isInteger(id) || id < 1 || id > 2147483647) throw new Error('Bộ lọc không hợp lệ');

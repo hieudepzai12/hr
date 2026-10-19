@@ -8,6 +8,7 @@ import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import Avatar from './Avatar';
 import Sidebar from './Sidebar';
+import NavigationSearch from './NavigationSearch';
 
 export default function Layout({ title, subtitle, actions, children }) {
   const pathname = usePathname();
@@ -47,13 +48,14 @@ export default function Layout({ title, subtitle, actions, children }) {
     <div className="w-full min-w-0 max-w-full lg:flex-1">
       <header className="app-header sticky top-0 z-20 flex min-h-[76px] items-center justify-between gap-3 border-b border-line bg-white/95 px-4 backdrop-blur sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center gap-3">
-          <button type="button" aria-label="Mở menu" aria-controls="app-sidebar" aria-expanded={mobileOpen} onClick={() => { setNotificationsOpen(false); setMobileOpen(true); }} className="icon-button shrink-0 focus-ring lg:hidden"><Menu size={20} /></button>
+          <div className="lg:hidden"><button type="button" aria-label="Mở menu" aria-controls="app-sidebar" aria-expanded={mobileOpen} onClick={() => { setNotificationsOpen(false); setMobileOpen(true); }} className="icon-button shrink-0 focus-ring"><Menu size={20} /></button></div>
           <div className="min-w-0 py-3">
             <h1 className="truncate text-lg font-semibold tracking-tight text-ink sm:text-xl">{title}</h1>
             {subtitle && <p className="mt-0.5 hidden truncate text-xs text-slate sm:block sm:text-sm">{subtitle}</p>}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <NavigationSearch />
           {canViewTasks && <div className="relative">
             <button type="button" aria-label={`Thông báo công việc: ${alerts.length}`} aria-expanded={notificationsOpen} title="Thông báo công việc" onClick={() => setNotificationsOpen((current) => !current)} className="icon-button relative">
               <Bell size={19} />{alerts.length > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-clay px-1.5 text-[10px] font-semibold text-white">{alerts.length}</span>}

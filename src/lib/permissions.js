@@ -1,8 +1,11 @@
+import { NEW_MODULES } from './governance-config.js';
+
 export const MODULES = [
-  ['dashboard', 'Tổng quan'], ['employees', 'Nhân viên'],
+  ['dashboard', 'Tổng quan'], ['employees', 'Nhân viên'], ['profiles','Profile nhân sự'],
   ['organization', 'Sơ đồ tổ chức'], ['departments', 'Phòng ban'],
   ['reports', 'Báo cáo'], ['tasks', 'Timeline & Deadline'],
   ['kpi', 'Đánh giá KPI'], ['customers', 'Khách hàng'],
+  ...NEW_MODULES,
 ];
 export const ROLES = [
   ['admin', 'Admin'], ['director', 'Giám đốc'],
@@ -13,11 +16,13 @@ export const BUILTIN_ROLE_KEYS = ROLES.map(([key]) => key);
 export const ORGANIZATION_SCOPES = ['none', 'department', 'full'];
 export const DATA_SCOPES = ['none', 'self', 'department', 'all'];
 export const DATA_ACTIONS = ['view', 'create', 'edit', 'approve', 'delete', 'restore', 'print'];
-export const SCOPED_MODULES = ['tasks', 'reports', 'customers'];
+export const SCOPED_MODULES = ['tasks', 'reports', 'customers', 'profiles', ...NEW_MODULES.map(([key]) => key)];
 
 function defaultScopes(role, resource) {
   if (role.startsWith('custom_')) return Object.fromEntries(DATA_ACTIONS.map((action) => [action, 'none']));
   if (role === 'admin') return Object.fromEntries(DATA_ACTIONS.map((action) => [action, 'all']));
+  if(resource==='profiles')return Object.fromEntries(DATA_ACTIONS.map(action=>[action,action==='view'?(role==='manager'?'department':'self'):'none']));
+  if (NEW_MODULES.some(([key]) => key === resource)) return Object.fromEntries(DATA_ACTIONS.map((action) => [action, 'none']));
   if (resource === 'customers') return {
     view: role === 'director' || role === 'hr' ? 'all' : 'department',
     create: role === 'director' || role === 'hr' ? 'all' : 'none',
@@ -38,7 +43,15 @@ export function defaultPermissions(role) {
   }]));
   permissions.organization.scope = manager ? 'full' : role === 'employee' ? 'department' : 'none';
   if (role === 'hr') permissions.organization.scope = 'full';
-  for (const resource of SCOPED_MODULES) permissions[resource].scopes = defaultScopes(role, resource);
+  for (const resource of SCOPED_MODULES) {
+    permissions[resource].scopes = defaultScopes(role, resource);
+    if (NEW_MODULES.some(([key]) => key === resource)) {
+      permissions[resource].view = role === 'admin';
+      permissions[resource].manage = role === 'admin';
+    }
+  }
+  permissions.profiles.view=permissions.profiles.scopes.view!=='none';
+  permissions.profiles.manage=false;
   return permissions;
 }
 
@@ -74,6 +87,10 @@ export function effectivePermissions(role, overrides = {}) {
     : !legacyView ? 'none' : ELEVATED_ROLES.includes(role) ? 'full' : 'department';
   defaults.organization.view = defaults.organization.scope !== 'none';
   defaults.organization.manage = false;
+  const profileScope=defaults.profiles.scopes.view;
+  defaults.profiles.scopes=Object.fromEntries(DATA_ACTIONS.map(action=>[action,action==='view'&&['self','department','all'].includes(profileScope)?profileScope:'none']));
+  defaults.profiles.view=defaults.profiles.scopes.view!=='none';
+  defaults.profiles.manage=false;
   return defaults;
 }
 
@@ -83,6 +100,7 @@ export function permissionForRequest(pathname, method) {
   if (pathname.startsWith('/api/tasks') || pathname.startsWith('/api/reports') || pathname.startsWith('/api/customers')) return null;
   if (pathname === '/api/dashboard/stats') return ['dashboard', 'view'];
   if (pathname === '/api/organization') return ['organization', 'view'];
+  if(pathname==='/api/profiles'||pathname.startsWith('/api/profiles/'))return ['profiles','view'];
   const segment = pathname.split('/')[2];
   const section = { employees: 'employees', departments: 'departments', reports: 'reports', tasks: 'tasks', kpi: 'kpi' }[segment];
   if (!section) return null;

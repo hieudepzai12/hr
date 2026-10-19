@@ -15,6 +15,10 @@ export const PUT = withAuth(async (req, { params }) => {
 
 export const DELETE = withAuth(async (req, { params }) => {
   const { id } = await params;
-  await query('DELETE FROM departments WHERE id = $1', [id]);
+  try { await query('DELETE FROM departments WHERE id = $1', [id]); }
+  catch(error) {
+    if(error.code==='23503')return NextResponse.json({error:'Phòng ban đang được dùng trong cơ cấu, dự án hoặc ngân sách. Cần xử lý liên kết trước khi xóa.'},{status:409});
+    throw error;
+  }
   return NextResponse.json({ success: true });
 }, { roles: ['admin', 'director', 'manager'] });

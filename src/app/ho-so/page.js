@@ -7,11 +7,14 @@ import Layout from '@/components/Layout';
 import Avatar from '@/components/Avatar';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { useAuth } from '@/context/AuthContext';
+import ProfilesPanel from '@/components/ProfilesPanel';
 
 const ROLE_LABEL = { admin: 'Quản trị viên', director: 'Giám đốc', manager: 'Quản lý', employee: 'Nhân viên' };
 
 function ProfileContent() {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, can } = useAuth();
+  const [tab,setTab]=useState('personal');
+  const showProfiles=tab==='profiles'&&can('profiles');
   const fileRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
@@ -56,8 +59,9 @@ function ProfileContent() {
   };
 
   return (
-    <Layout title="Hồ sơ của tôi" subtitle="Thông tin cá nhân và tài khoản">
-      <div className="w-full min-h-[calc(100vh-160px)] bg-paper-raised rounded-lg border border-line p-6">
+    <Layout title="Thông tin cá nhân" subtitle="Thông tin tài khoản và hồ sơ nhân sự theo quyền được cấp">
+      <div className="mb-4 flex flex-wrap gap-2" aria-label="Chọn thông tin cá nhân"><button type="button" className={!showProfiles?'ui-button ui-button-primary':'ui-button'} aria-pressed={!showProfiles} onClick={()=>setTab('personal')}>Thông tin cá nhân</button>{can('profiles')&&<button type="button" className={showProfiles?'ui-button ui-button-primary':'ui-button'} aria-pressed={showProfiles} onClick={()=>setTab('profiles')}>Hồ sơ nhân sự</button>}</div>
+      {showProfiles?<ProfilesPanel/>:<div className="w-full min-h-[calc(100vh-160px)] bg-paper-raised rounded-lg border border-line p-6">
         <div className="flex items-center gap-5">
           <div className="relative">
             <Avatar name={user.full_name} color={user.avatar_color} avatarPath={user.avatar_path} size={72} />
@@ -114,7 +118,7 @@ function ProfileContent() {
           )}
         </div>
         <p className="text-xs text-slate mt-3">Định dạng PNG, JPG, WEBP hoặc GIF — tối đa 3MB.</p>
-      </div>
+      </div>}
     </Layout>
   );
 }

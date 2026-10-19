@@ -1,5 +1,9 @@
 # NhanSu — Hệ thống Quản lý Nhân sự (Next.js + Postgres)
 
+## Bản nâng cấp quản trị OTIS
+
+Hướng dẫn chức năng mới, migration 5, kiểm thử local và rollback: [NANG_CAP_QUAN_TRI_OTIS.md](docs/NANG_CAP_QUAN_TRI_OTIS.md). Runtime không tự migrate database từ xa. Quyền các phân hệ mới mặc định chưa cấp cho vai trò ngoài Admin; cần cấu hình riêng trước khi sử dụng. Các mô tả schema phiên bản 4 bên dưới là lịch sử nền trước nâng cấp.
+
 Ứng dụng quản lý nhân sự full-stack: quản lý nhân viên/phòng ban, gửi & duyệt báo cáo (kèm file đính kèm), theo dõi công việc theo timeline/deadline (Kanban, kèm file đính kèm), đánh giá KPI theo tiêu chí trọng số, và ảnh đại diện nhân viên. Toàn bộ frontend + backend nằm trong một dự án Next.js duy nhất — **sẵn sàng deploy lên Vercel**.
 
 ## Công nghệ sử dụng

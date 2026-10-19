@@ -10,6 +10,7 @@ import { useAuth } from '@/context/AuthContext';
 import { ReportStatusBadge, TaskStatusBadge } from '@/components/Badges';
 import { deadlineAlert, vietnamToday } from '@/lib/deadline';
 import { scopeFor } from '@/lib/access';
+import ManagementInsights from '@/components/ManagementInsights';
 
 const dateText = (value) => value ? new Date(value).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '—';
 const dateOnlyText = (value) => value ? value.split('-').reverse().join('/') : '—';
@@ -52,6 +53,7 @@ function DashboardContent() {
       {canApproveReports && <StatCard label="Báo cáo chờ duyệt" value={stats.pendingReports ?? 0} icon={FileText} tone="bg-[#e3edfc] text-[#244b80]" href="/bao-cao?status=submitted" />}
     </div>
 
+    <ManagementInsights compact />
     <div className="mt-5 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
       <section className="ui-card w-full min-w-0 max-w-full overflow-hidden"><div className="flex flex-col items-start gap-2 border-b border-line px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-4"><div className="min-w-0"><h2 className="section-heading mb-0">Việc cần xử lý</h2><p className="mt-0.5 text-xs text-slate">Quá hạn, đến hạn, chờ nghiệm thu hoặc chậm mốc tiến độ</p></div><Link href="/timeline" className="shrink-0 text-xs font-semibold text-teal hover:underline">Xem tất cả</Link></div>
         {!actionable.length ? <div className="ui-empty"><CheckCheck size={25} className="mx-auto mb-2 text-sage" />Chưa có việc cần xử lý.</div> : <div className="divide-y divide-line">{actionable.slice(0, 6).map((task) => <Link href="/timeline" key={task.id} className="flex min-w-0 flex-col items-start gap-1 px-3 py-3 hover:bg-paper sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-5"><span className="min-w-0 max-w-full"><span className="block break-words text-sm font-semibold text-ink sm:truncate">#{task.id} {task.title}</span><span className="text-xs text-slate">Hạn: {dateOnlyText(task.due_date)}</span></span><span className={`max-w-full break-words text-xs font-semibold sm:shrink-0 ${task.alert.kind === 'overdue' ? 'text-clay' : task.alert.kind === 'review' ? 'text-teal' : 'text-amber-dark'}`}>{task.alert.label}</span></Link>)}</div>}
