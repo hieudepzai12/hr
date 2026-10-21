@@ -218,3 +218,54 @@ textarea:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
   .org-tree ul ul::before { display: none; }
   .org-tree .node-box { min-width: 0; width: 100%; height: auto; min-height: 72px; padding: 12px 16px; border-radius: 8px; text-align: left; }
 }
+
+
+/* Personnel charts: compact cards, explicit hierarchy, scroll confined to canvas. */
+.personnel-tree .person-node { display: flex; align-items: center; gap: 12px; width: 248px; min-height: 86px; padding: 13px 14px; border: 1px solid #dce4ef; border-radius: 12px; background: white; color: #172b49; text-align: left; box-shadow: 0 2px 5px #14243d06; transition: border-color .15s, box-shadow .15s; }
+.personnel-tree .person-node:hover { border-color: #7c9fce; box-shadow: 0 4px 12px #14243d12; }
+.person-node-name { display: block; font-size: 13px; font-weight: 650; line-height: 1.45; overflow-wrap: anywhere; }
+.person-node-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin-top: 3px; font-size: 11px; line-height: 1.45; color: #526680; }
+.person-node-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 7px; font-size: 10px; line-height: 1.4; color: #65758b; }
+.personnel-tree .person-node--manager { border-top: 3px solid #6b91c4; }
+.personnel-tree .person-node--leader { border-color: #14243d; background: #14243d; color: white; }
+.person-node--leader .person-node-title, .person-node--leader .person-node-meta { color: #c3d2e6; }
+.person-node-toggle { display: inline-flex; align-items: center; gap: 4px; align-self: center; margin-top: 7px; padding: 4px 8px; border-radius: 6px; background: #edf2f8; color: #4b627f; font-size: 10px; }
+.personnel-tree li::before, .personnel-tree li::after, .personnel-tree ul ul::before { border-color: #c5d2e2; border-width: 1px; }
+.personnel-tree--horizontal { min-width: max-content; }
+.personnel-chart-panel:fullscreen { display: flex; flex-direction: column; height: 100dvh; border: 0; border-radius: 0; }
+.personnel-chart-panel .ui-button { display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 7px 10px; border: 1px solid #dce4ef; border-radius: 8px; background: #fff; color: #344c6c; font-size: 12px; font-weight: 500; }
+.personnel-chart-panel .ui-button:hover { background: #f1f5fa; border-color: #a9bdd7; }
+@media(max-width:767px) { .personnel-tree .person-node { width: 100%; min-height: 82px; padding: 12px; gap: 9px; } .personnel-tree--horizontal { min-width: 0; } .personnel-tree ul ul { margin-left: 8px; padding-left: 10px; } }
+
+
+/* Fit the horizontal personnel chart into the available screen space. */
+.personnel-fit-canvas { position: relative; min-height: 220px; overflow: hidden; background: #f5f7fb; }
+.personnel-fit-controls { position: absolute; top: 12px; right: 12px; z-index: 2; display: flex; align-items: center; gap: 2px; padding: 4px; border: 1px solid #dce4ef; border-radius: 9px; background: #fff; box-shadow: 0 2px 8px #14243d0a; }
+.personnel-fit-controls button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 30px; min-width: 30px; border-radius: 5px; color: #344c6c; font-size: 11px; }
+.personnel-fit-controls button:hover { background: #edf2f8; }
+.personnel-fit-controls button:focus-visible { outline: 2px solid #3268ad; outline-offset: 2px; }
+.personnel-fit-controls span { min-width: 40px; text-align: center; font-size: 11px; color: #526680; }
+.personnel-fit-controls .personnel-fit-reset { padding: 0 8px; border-left: 1px solid #e2e8f0; border-radius: 0 5px 5px 0; }
+.personnel-fit-scroll { width: 100%; height: 100%; overflow: auto; }
+.personnel-fit-space { display: flex; align-items: center; justify-content: center; min-width: 100%; min-height: 100%; padding: 48px 24px 24px; }
+.personnel-fit-canvas .personnel-tree--horizontal { min-width: max-content; }
+.personnel-fit-canvas .personnel-tree--horizontal ul { display: flex; justify-content: center; padding-top: 20px; }
+.personnel-fit-canvas .personnel-tree--horizontal li { display: flex; flex-direction: column; align-items: center; padding: 20px 10px 0; }
+.personnel-fit-canvas .personnel-tree--horizontal > ul { padding: 0; }
+.personnel-fit-canvas .personnel-tree--horizontal > ul > li { padding-top: 0; }
+.personnel-fit-canvas .person-node { width: 208px; min-height: 76px; padding: 10px 12px; gap: 9px; border-radius: 9px; }
+.personnel-fit-canvas .person-node-name { font-size: 12px; }
+.personnel-fit-canvas .person-node-title { font-size: 10px; }
+.personnel-fit-canvas .person-node-meta { margin-top: 4px; font-size: 9px; }
+.personnel-fit-canvas .personnel-tree--horizontal li::before,
+.personnel-fit-canvas .personnel-tree--horizontal li::after { display: block; height: 20px; border: 0; border-top: 1px solid #bdccdf; }
+.personnel-fit-canvas .personnel-tree--horizontal li::after { border-left: 1px solid #bdccdf; }
+.personnel-fit-canvas .personnel-tree--horizontal ul ul::before { display: block; height: 20px; border: 0; border-left: 1px solid #bdccdf; }
+.personnel-fit-canvas .personnel-tree--horizontal > ul > li::before, .personnel-fit-canvas .personnel-tree--horizontal > ul > li::after, .personnel-fit-canvas .personnel-tree--horizontal li:only-child::before, .personnel-fit-canvas .personnel-tree--horizontal li:only-child::after { display: none; }
+.personnel-fit-canvas .personnel-tree--horizontal ul.personnel-leaf-group { display: flex; flex-direction: row; flex-wrap: nowrap; align-items: flex-start; gap: 0; margin: 0; padding: 20px 0 0; border: 0; }
+.personnel-fit-canvas .personnel-leaf-group > li { padding: 20px 10px 0; }
+.personnel-fit-canvas .personnel-tree--horizontal li:first-child::before,
+.personnel-fit-canvas .personnel-tree--horizontal li:last-child::after { display: none; }
+.personnel-fit-canvas .personnel-tree--horizontal li:last-child::before { border-right: 1px solid #bdccdf; border-radius: 0 6px 0 0; }
+.personnel-fit-canvas .personnel-tree--horizontal li:first-child::after { border-radius: 6px 0 0 0; }
+@media(max-width:767px) { .personnel-fit-canvas .personnel-tree--horizontal ul ul { margin: 0; padding-left: 0; border: 0; } }

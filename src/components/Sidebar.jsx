@@ -3,22 +3,23 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { LogOut, PanelLeftClose, PanelLeftOpen, X, ChevronDown, ChevronRight } from 'lucide-react';
 import { visibleNavigation, navigationActive } from '@/lib/navigation';
 import { useAuth } from '@/context/AuthContext';
 
 function SidebarItem({ item, pathname, compact, onClose, onToggle }) {
   const [expanded, setExpanded] = useState(true);
+  const submenuId = useId();
   const Icon = item.icon;
   const active = navigationActive(item, pathname);
   const className = `relative flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-[13px] font-medium transition-colors focus-ring ${compact ? 'justify-center' : ''} ${active ? 'bg-[#294368] text-white' : 'text-[#d4dfed] hover:bg-white/10 hover:text-white'}`;
   if (item.children) return <div>
-    <button type="button" className={className} title={compact ? item.label : undefined} aria-label={compact ? item.label : undefined} aria-expanded={!compact && expanded} aria-controls="organization-submenu" onClick={() => { if (compact) { onToggle(); setExpanded(true); } else setExpanded(!expanded); }}>
+    <button type="button" className={className} title={compact ? item.label : undefined} aria-label={compact ? item.label : undefined} aria-expanded={!compact && expanded} aria-controls={submenuId} onClick={() => { if (compact) { onToggle(); setExpanded(true); } else setExpanded(!expanded); }}>
       <Icon size={18} className="shrink-0" />
       {!compact && <><span className="min-w-0 flex-1">{item.label}</span>{expanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</>}
     </button>
-    {!compact && expanded && <div id="organization-submenu" className="ml-5 mt-1 space-y-1 border-l border-white/15 pl-2">
+    {!compact && expanded && <div id={submenuId} className="ml-5 mt-1 space-y-1 border-l border-white/15 pl-2">
       {item.children.map(child => <SidebarItem key={child.to} item={child} pathname={pathname} compact={false} onClose={onClose} onToggle={onToggle} />)}
     </div>}
   </div>;

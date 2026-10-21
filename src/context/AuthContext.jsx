@@ -1,24 +1,32 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import api from '@/lib/api';
+import api, { SESSION_EXPIRED_EVENT } from '@/lib/api';
 import { effectivePermissions } from '@/lib/permissions';
+import { useRouter } from 'next/navigation';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
+  const router = useRouter();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    const expireSession = () => {
+      setUser(null);
+      if (window.location.pathname !== '/login') router.replace('/login');
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, expireSession);
     localStorage.removeItem('hr_token');
     api.get('/auth/me').then(({ data }) => {
         localStorage.setItem('hr_user', JSON.stringify(data));
         setUser(data);
       }).catch(() => { localStorage.removeItem('hr_user'); setUser(null); })
       .finally(() => setReady(true));
-  }, []);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, expireSession);
+  }, [router]);
 
   const login = useCallback(async (email, password) => {
     setLoading(true);

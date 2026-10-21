@@ -21,7 +21,7 @@ const ok=async(path,cookie,method='GET',body,expected=200)=>{const result=await 
 const add=async(resource,body,actor='admin')=>ok(`/governance/${resource}`,actors[actor].cookie,'POST',body,201);
 const change=async(resource,row,action,actor='reviewer',reason='Local verification')=>ok(`/governance/${resource}/${row.id}`,actors[actor].cookie,'PATCH',{version:row.version,action,reason});
 try{
-  assert.equal((await db.query('SELECT MAX(version)::int AS version FROM schema_migrations')).rows[0].version,5);
+  assert.equal((await db.query('SELECT MAX(version)::int AS version FROM schema_migrations')).rows[0].version,8);
   const midnight=new Date('2026-10-18T17:01:00Z');assert.equal(vietnamToday(midnight),'2026-10-19');
   for(const [due,kind] of [['2026-10-22','upcoming'],['2026-10-20','upcoming'],['2026-10-19','today'],['2026-10-18','overdue']])assert.equal(deadlineAlert({due_date:due,status:'in_progress'},midnight).kind,kind);
   assert.equal(deadlineAlert({due_date:'2026-10-18',status:'review'},midnight).kind,'review');
@@ -56,15 +56,23 @@ try{
   const assignment=await add('assignments',{name:'Local assignment',position_id:position.id,employee_id:actors.employee.id,start_date:'2026-10-01',notes:'Confirmed test fixture'});
   assert.equal((await call('/governance/assignments',admin,'POST',{name:'Overlap',position_id:position.id,employee_id:actors.employee.id,start_date:'2026-10-19',notes:'Overlap'})).status,400);
   assert.equal((await call('/governance/assignments',manager,'POST',{name:'Cross scope',position_id:position.id,employee_id:actors.other.id,start_date:'2026-10-19',notes:'Out of scope'})).status,403);
-  let staffing=await add('staffing',{name:'Local staffing',position_id:position.id,month:'2026-10',target_count:3,notes:'Test approved headcount'});
-  const staffingList=await ok('/governance/staffing?month=2026-10',admin);assert.equal(staffingList.items.find(row=>row.id===staffing.id).actual_count,1);
+  let staffing=await add('staffing',{name:'Local staffing',department_id:departmentIds[0],month:'2026-10',target_count:3,notes:'Test approved headcount'});
+  const staffingList=await ok('/governance/staffing?month=2026-10',admin);assert.equal(staffingList.items.find(row=>row.id===staffing.id).actual_count,2);
   staffing=await change('staffing',staffing,'submit','admin');
-  assert.equal((await call(`/governance/staffing/${staffing.id}`,admin,'PATCH',{version:staffing.version,action:'approve'})).status,403);
-  staffing=await change('staffing',staffing,'approve');
+  staffing=await change('staffing',staffing,'approve','admin');
   assert.equal((await call(`/governance/staffing/${staffing.id}`,admin,'PUT',{...staffing,target_count:5})).status,409);
   staffing=await change('staffing',staffing,'reopen');
   const stale=await call(`/governance/staffing/${staffing.id}`,admin,'PUT',{...staffing,version:staffing.version-1});assert.equal(stale.status,409);
   const recruitment=await add('recruitment',{name:'Local recruitment',position_id:position.id,quantity:2,hired_count:0,hiring_status:'pending',notes:'Test shortage'});
+  const liveTitle=`Live title ${suffix}`;
+  await db.query('UPDATE employees SET position=$1 WHERE id=$2',[liveTitle,actors.employee.id]);
+  const liveOptions=await ok('/governance/recruitment?options=1',admin);
+  const liveChoice=liveOptions.positions.find(row=>row.id===`employee:${actors.employee.id}:0`);assert.ok(liveChoice);
+  const fromEmployee=await add('recruitment',{name:'From actual title',position_id:liveChoice.id,quantity:1,hiring_status:'pending',notes:'Shared title test'});
+  const future=await add('recruitment',{name:'Future role',position_id:'new',position_name:`Future title ${suffix}`,position_department_id:departmentIds[0],quantity:1,hiring_status:'pending',notes:'No employee required'});
+  assert.notEqual(fromEmployee.position_id,future.position_id);
+  assert.equal((await call('/governance/recruitment',manager,'POST',{name:'Forbidden future role',position_id:'new',position_name:'Denied role',position_department_id:departmentIds[1],quantity:1,hiring_status:'pending',notes:'Cross department'})).status,403);
+  const futureBudget=await add('budgets',{name:'Future role budget',position_id:'new',position_name:`Future title ${suffix}`,position_department_id:departmentIds[0],month:'2026-11',headcount:1,base_salary:10000000,notes:'Reuse planned title'});assert.equal(futureBudget.position_id,future.position_id);
   assert.equal((await call('/governance/recruitment',admin,'POST',{...recruitment,hired_count:3})).status,400);
   const project=await add('projects',{code:`P-${suffix}`,name:`Verification project ${suffix}`,department_id:departmentIds[0],owner_id:actors.admin.id,status:'active',verification_status:'needs_verification'});
   await add('members',{name:'Lead',project_id:project.id,employee_id:actors.employee.id,allocation:100});
@@ -107,7 +115,7 @@ try{
   assert.equal((await call(`/reports/${report.id}`,employee,'PUT',{title:'Changed',content:'Changed'})).status,409);
   const print=await call(`/tasks/print?project_id=${project.id}`,admin);assert.equal(print.status,200);assert.equal(print.data.tasks.length,1);assert.equal(print.data.tasks[0].id,task.id);
   const oldPermissions=defaultPermissions('manager');for(const key of ['positions','staffing','recruitment','projects','bonuses','budgets','documents','insights','activity'])delete oldPermissions[key];
-  await ok('/permissions',admin,'PUT',{role:'manager',permissions:oldPermissions});
+  await ok('/permissions',admin,'PUT',{role,permissions:oldPermissions});
   console.log('PASS: local migration schema, deny-by-default permissions, department isolation, validation, cycles, headcount, project/task links, approval locks, versions, recovery, exact VND calculations, scoped summaries, private document links and legacy task/report workflows.');
   if(process.argv.includes('--browser')){
     const {spawnSync}=await import('node:child_process');

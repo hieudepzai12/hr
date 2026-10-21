@@ -26,6 +26,7 @@ export const GET = withAuth(async(req,ctx,user)=>governanceResponse(async()=>{
     const insights=governanceScope(user,'insights','view','r',scope.params.length+1);
     const args=[...scope.params,...insights.params];
     let where=`r.deleted_at IS NULL AND ${scope.sql} AND ${insights.sql}`;
+    if(resource==='staffing')where+=' AND r.position_id IS NULL';
     if(month&&['staffing','budgets'].includes(resource)){args.push(month);where+=` AND r.month=$${args.length}`;}
     const amount=resource==='budgets'?'SUM(CASE WHEN r.status=\'approved\' THEN r.total_amount ELSE 0 END)':resource==='awards'?'SUM(CASE WHEN r.status=\'approved\' THEN r.amount ELSE 0 END)':'NULL::numeric';
     const monthly=['staffing','budgets'].includes(resource);

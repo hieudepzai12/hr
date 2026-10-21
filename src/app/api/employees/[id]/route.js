@@ -3,6 +3,7 @@ import { query, queryOne } from '@/lib/db';
 import { withAuth } from '@/lib/auth';
 import { roleExists } from '@/lib/role-permissions';
 import { validateManagerAssignment } from '@/lib/organization';
+import {employeePosition} from '@/lib/employee-job-titles';
 
 export const GET = withAuth(async (req, { params }, user) => {
   const { id } = await params;
@@ -21,7 +22,8 @@ export const GET = withAuth(async (req, { params }, user) => {
 export const PUT = withAuth(async (req, { params }, user) => {
   const { id } = await params;
   const body = await req.json().catch(() => null);
-  const { full_name, position, department_id, manager_id, phone, role, status, join_date } = body || {};
+  const { full_name, department_id, manager_id, phone, role, status, join_date } = body || {};
+  let position;try{position=employeePosition(body);}catch(e){return NextResponse.json({error:e.message},{status:400});}
   if (typeof full_name !== 'string' || !full_name.trim() || full_name.length > 300 ||
       !['active', 'inactive'].includes(status)) {
     return NextResponse.json({ error: 'Thông tin nhân viên không hợp lệ' }, { status: 400 });

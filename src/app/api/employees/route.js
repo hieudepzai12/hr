@@ -4,6 +4,7 @@ import { query } from '@/lib/db';
 import { withAuth } from '@/lib/auth';
 import { roleExists } from '@/lib/role-permissions';
 import { validateManagerAssignment } from '@/lib/organization';
+import {employeePosition} from '@/lib/employee-job-titles';
 import { parsePagination, pagedResult, appendPagination } from '@/lib/pagination';
 
 const COLORS = ['#2C5F5D', '#C97B4A', '#5B5F97', '#8A9B6E', '#B85C5C', '#4A7B8C'];
@@ -36,15 +37,21 @@ export const GET = withAuth(async (req, ctx, user) => {
   }
   if (status) { params.push(status); sql += ` AND e.status = $${params.length}`; }
   if (search) { params.push(`%${search}%`); sql += ` AND (e.full_name ILIKE $${params.length} OR e.email ILIKE $${params.length})`; }
+  let total;
+  if(pagination&&searchParams.get('include_total')==='1'){
+    total=(await query(`SELECT COUNT(*)::int AS total FROM (${sql}) scoped_employees`,params)).rows[0].total;
+  }
   sql = appendPagination(sql + ' ORDER BY e.full_name, e.id', params, pagination);
 
   const { rows } = await query(sql, params);
-  return NextResponse.json(pagedResult(rows, pagination));
+  const result=pagedResult(rows, pagination);
+  return NextResponse.json(total===undefined?result:{...result,total});
 });
 
 export const POST = withAuth(async (req, ctx, user) => {
   const body = await req.json().catch(() => null);
-  const { full_name, email, password, role, position, department_id, manager_id, phone, join_date } = body || {};
+  const { full_name, email, password, role, department_id, manager_id, phone, join_date } = body || {};
+  let position;try{position=employeePosition(body);}catch(e){return NextResponse.json({error:e.message},{status:400});}
   if (!await roleExists(role || 'employee') || (user.role !== 'admin' && role && role !== 'employee')) {
     return NextResponse.json({ error: 'Vai trò không hợp lệ' }, { status: 403 });
   }

@@ -57,10 +57,11 @@ export function awardTotal(policy, fields) {
   const rateUnits = BigInt(Math.round(Number(policy.rate) * 10000));
   return ((BigInt(fields.basis_amount) * rateUnits + 500000n) / 1000000n).toString();
 }
-export function assertTransition(before, action, actorId) {
+export function assertTransition(before, action, actorId, context = {}) {
   if (action === 'submit' && ['draft', 'rejected'].includes(before.status)) return 'submitted';
   if (['approve', 'reject'].includes(action) && before.status === 'submitted') {
-    if (Number(before.created_by) === Number(actorId)) throw new GovernanceError('Không được tự duyệt đề xuất của mình', 403);
+    const adminStaffing=context.role==='admin'&&context.resource==='staffing';
+    if (Number(before.created_by) === Number(actorId)&&!adminStaffing) throw new GovernanceError('Không được tự duyệt đề xuất của mình', 403);
     return action === 'approve' ? 'approved' : 'rejected';
   }
   if (action === 'reopen' && before.status === 'approved') return 'draft';

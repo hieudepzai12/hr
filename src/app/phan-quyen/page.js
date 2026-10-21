@@ -96,16 +96,16 @@ function Content() {
     finally { setSaving(false); }
   };
   return <Layout title="Phân quyền" subtitle="Quản lý quyền theo vai trò. Mọi người cùng vai trò dùng chung bộ quyền.">
-    <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-      <div className="bg-paper-raised rounded-lg border border-line p-3">
+    <div className="grid min-w-0 gap-6 lg:h-[calc(100dvh-124px)] lg:min-h-0 lg:grid-cols-[280px_minmax(0,1fr)]">
+      <div className="min-w-0 bg-paper-raised rounded-lg border border-line p-3 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain">
         <div className="flex items-center justify-between gap-2 px-3 py-2"><h2 className="text-sm font-semibold">Bộ phân quyền</h2><button onClick={() => { setCreateError(''); setCreateOpen(true); }} className="p-1.5 rounded text-teal hover:bg-paper focus-ring" aria-label="Thêm bộ phân quyền" title="Thêm bộ phân quyền"><Plus size={18} /></button></div>
         {roles.map((item) => <button key={item.role} onClick={() => { setRole(item.role); setDraft(structuredClone(item.permissions)); setMessage(''); }} className={`w-full text-left px-3 py-3 rounded-md text-sm ${role === item.role ? 'bg-teal text-white' : 'hover:bg-paper'}`}>
           <span className="font-medium">{item.label}</span>{item.role === 'admin' && <span className="block text-xs opacity-70">Tài khoản hệ thống · cố định</span>}
         </button>)}
       </div>
-      <div className="bg-paper-raised rounded-lg border border-line p-5">
+      <div role="region" aria-label="Chi tiết quyền của vai trò" tabIndex={0} className="min-w-0 bg-paper-raised rounded-lg border border-line p-5 focus-ring lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain">
         {selected ? <>
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div className="sticky -top-5 z-10 -mx-5 -mt-5 mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-line bg-white px-5 py-5">
             <div><h2 className="font-semibold">{selected.label}</h2><p className="text-xs text-slate">Thay đổi áp dụng cho tất cả tài khoản mang vai trò này ngay sau khi lưu.</p></div>
             <div className="flex items-center gap-2">
               {role !== 'admin' && <><button onClick={() => { setEditName(selected.label); setEditError(''); setEditOpen(true); }} className="p-2 text-slate hover:text-teal rounded-md focus-ring" aria-label={`Sửa tên ${selected.label}`} title="Sửa tên"><Pencil size={17} /></button><button onClick={() => { setDeleteError(''); setDeleteOpen(true); }} className="p-2 text-slate hover:text-clay rounded-md focus-ring" aria-label={`Xóa ${selected.label}`} title="Xóa bộ quyền"><Trash2 size={17} /></button></>}

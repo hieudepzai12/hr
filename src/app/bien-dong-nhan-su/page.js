@@ -1,2 +1,2 @@
-import GovernanceWorkspace from '@/components/GovernanceWorkspace';
-export default function Page(){return <GovernanceWorkspace resource="assignments"/>;}
+import {redirect} from 'next/navigation';
+export default function Page(){redirect('/chuc-danh');}

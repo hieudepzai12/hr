@@ -2,6 +2,8 @@ import { Pool, types } from 'pg';
 import bcrypt from 'bcryptjs';
 import { migrateGovernance } from './migrations/005-governance.js';
 import { migrateAuditEntityText } from './migrations/006-audit-entity-text.js';
+import { migratePersonnelDutyProject } from './migrations/007-personnel-duty-project.js';
+import { migrateDepartmentStaffing } from './migrations/008-department-staffing.js';
 // DATE has no timezone; preserve yyyy-mm-dd rather than converting through local midnight.
 types.setTypeParser(1082, (value) => value);
 
@@ -86,7 +88,7 @@ export async function queryOne(text, params) {
 }
 
 let schemaReadyPromise = null;
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 8;
 
 /** Đảm bảo bảng đã được tạo & seed dữ liệu mẫu. Gọi an toàn nhiều lần — chỉ chạy thật sự một lần. */
 export function ensureSchema() {
@@ -403,6 +405,16 @@ export async function migrateSchema() {
     if(!auditMigration.rowCount){
       await migrateAuditEntityText(client);
       await client.query('INSERT INTO schema_migrations(version) VALUES (6)');
+    }
+    const dutyProjectMigration=await client.query('SELECT 1 FROM schema_migrations WHERE version=7');
+    if(!dutyProjectMigration.rowCount){
+      await migratePersonnelDutyProject(client);
+      await client.query('INSERT INTO schema_migrations(version) VALUES (7)');
+    }
+    const departmentStaffingMigration=await client.query('SELECT 1 FROM schema_migrations WHERE version=8');
+    if(!departmentStaffingMigration.rowCount){
+      await migrateDepartmentStaffing(client);
+      await client.query('INSERT INTO schema_migrations(version) VALUES (8)');
     }
   });
 }

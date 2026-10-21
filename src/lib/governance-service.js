@@ -2,6 +2,8 @@ import { GOVERNANCE } from './governance-config';
 import { query, transaction } from './db';
 import { scopeFor, scopeAllows } from './access';
 import { writeAudit } from './audit';
+import {resolveDutyPosition,resolvePlannedPosition} from './personnel-duty';
+import {jobTitles} from './employee-job-titles';
 import { assertTransition, awardTotal, budgetTotal, GovernanceError, validId, validateGovernanceInput } from './governance-validation';
 
 const REFERENCES = { departments: ['departments', 'name'], employees: ['employees', 'full_name'], customers: ['customers', 'name'], ...Object.fromEntries(Object.entries(GOVERNANCE).map(([key, value]) => [key, [value.table, 'name']])) };
@@ -43,12 +45,17 @@ export async function listGovernance(resource, searchParams, user) {
   if (search) { if (search.length > 300) throw new GovernanceError('Từ khóa quá dài'); args.push(`%${search}%`); where += ` AND r.name ILIKE $${args.length}`; }
   const sort = ['name', 'created_at', 'updated_at', 'id', ...config.fields.filter((f) => ['date', 'month', 'number'].includes(f.type)).map((f) => f.key)].includes(searchParams.get('sort')) ? searchParams.get('sort') : 'updated_at';
   const direction = searchParams.get('direction') === 'asc' ? 'ASC' : 'DESC';
+  const count = await query(`SELECT COUNT(*)::int AS total FROM ${config.table} r WHERE ${where}`, args);
   const labels = config.fields.filter((field) => field.type === 'reference').map((field) => {
     const [table, column] = REFERENCES[field.resource];
+    if(resource==='assignments'&&field.key==='project_id'){
+      const projectScope=governanceScope(user,'projects','view','p',args.length+1);
+      args.push(...projectScope.params);
+      return `(SELECT p.name FROM projects p WHERE p.id=r.project_id AND p.deleted_at IS NULL AND ${projectScope.sql}) AS project_id_label`;
+    }
     return `(SELECT ${column} FROM ${table} WHERE id=r.${field.key}) AS ${field.key}_label`;
   });
-  const actual = resource === 'staffing' ? `, (SELECT COUNT(DISTINCT a.employee_id)::int FROM position_assignments a WHERE a.position_id=r.position_id AND a.deleted_at IS NULL AND a.start_date < (r.month||'-01')::date + INTERVAL '1 month' AND (a.end_date IS NULL OR a.end_date >= (r.month||'-01')::date)) AS actual_count` : '';
-  const count = await query(`SELECT COUNT(*)::int AS total FROM ${config.table} r WHERE ${where}`, args);
+  const actual = resource === 'staffing' ? `, (SELECT COUNT(*)::int FROM employees e WHERE e.department_id=r.department_id AND e.status='active' AND e.role<>'admin') AS actual_count` : '';
   const rows = await query(`SELECT r.* ${labels.length ? ',' + labels.join(',') : ''} ${actual} FROM ${config.table} r WHERE ${where} ORDER BY r.${sort} ${direction},r.id DESC LIMIT 20 OFFSET $${args.length + 1}`, [...args, (page - 1) * 20]);
   return { items: rows.rows, total: count.rows[0].total, page, pageSize: 20 };
 }
@@ -62,6 +69,11 @@ export async function detailGovernance(resource, id, user) {
   if (row.deleted_at) requireRecord(user, config, 'restore', row);
   for(const field of config.fields.filter(field=>field.type==='reference'&&row[field.key])){
     const [table,column]=REFERENCES[field.resource];
+    if(resource==='assignments'&&field.key==='project_id'){
+      const projectScope=governanceScope(user,'projects','view','p',2);
+      row.project_id_label=(await query(`SELECT p.name AS label FROM projects p WHERE p.id=$1 AND p.deleted_at IS NULL AND ${projectScope.sql}`,[row.project_id,...projectScope.params])).rows[0]?.label||'Không có quyền xem dự án';
+      continue;
+    }
     row[`${field.key}_label`]=(await query(`SELECT ${column} AS label FROM ${table} WHERE id=$1`,[row[field.key]])).rows[0]?.label||'—';
   }
   const [history, versions] = await Promise.all([
@@ -80,7 +92,24 @@ export async function detailGovernance(resource, id, user) {
 
 async function prepareFields(client, resource, body, user, before, intent) {
   const config = configFor(resource);
+  if(['recruitment','budgets'].includes(resource)&&intent!=='restore'&&typeof body.position_id==='string'){
+    const authorize=person=>requireRecord(user,config,before?'edit':'create',{owner_id:person.id,department_id:person.department_id});
+    if(body.position_id==='new')body={...body,position_id:await resolvePlannedPosition(client,body,user,authorize)};
+    else if(body.position_id.startsWith('employee:')){
+      const match=body.position_id.match(/^employee:([1-9]\d*):(\d+)$/);
+      if(!match||!validId(match[1]))throw new GovernanceError('Chức vụ không hợp lệ');
+      const employee=(await client.query("SELECT position FROM employees WHERE id=$1 AND status='active'",[match[1]])).rows[0];
+      const title=jobTitles(employee?.position)[Number(match[2])];
+      if(!title)throw new GovernanceError('Chức vụ đã thay đổi. Vui lòng mở lại biểu mẫu.');
+      body={...body,position_id:await resolveDutyPosition(client,{employee_id:match[1],position_title:title},user,authorize)};
+    }
+  }
+  if(resource==='assignments'&&intent!=='restore'&&Object.hasOwn(body,'position_title')){
+    const positionId=await resolveDutyPosition(client,body,user,employee=>requireRecord(user,config,before?'edit':'create',{owner_id:employee.id,department_id:employee.department_id}));
+    body={...body,position_id:positionId};
+  }
   const fields = validateGovernanceInput(resource, body);
+  if(resource==='staffing'&&intent!=='restore')fields.position_id=null;
   const rows = {};
   for (const field of config.fields.filter((field) => field.type === 'reference' && fields[field.key])) {
     const [table] = REFERENCES[field.resource];
@@ -89,6 +118,7 @@ async function prepareFields(client, resource, body, user, before, intent) {
     if (!result.rows[0]) throw new GovernanceError(`${field.label} không còn hoạt động`);
     rows[field.key] = result.rows[0];
   }
+  if(resource==='assignments'&&rows.project_id)requireRecord(user,GOVERNANCE.projects,'view',rows.project_id);
   fields.department_id ??= rows.position_id?.department_id ?? rows.project_id?.department_id ?? rows.folder_id?.department_id ?? user.department_id ?? null;
   fields.owner_id ??= rows.folder_id?.owner_id ?? before?.owner_id ?? user.id;
   if (['assignments', 'members', 'awards'].includes(resource)) fields.owner_id = fields.employee_id;
@@ -97,7 +127,7 @@ async function prepareFields(client, resource, body, user, before, intent) {
     const links=resource==='folders'
       ? 'SELECT 1 FROM document_folders WHERE parent_id=$1 AND deleted_at IS NULL UNION ALL SELECT 1 FROM internal_documents WHERE folder_id=$1 AND deleted_at IS NULL LIMIT 1'
       :resource==='projects'
-        ? 'SELECT 1 FROM tasks WHERE project_id=$1 AND deleted_at IS NULL UNION ALL SELECT 1 FROM project_members WHERE project_id=$1 AND deleted_at IS NULL LIMIT 1'
+        ? 'SELECT 1 FROM tasks WHERE project_id=$1 AND deleted_at IS NULL UNION ALL SELECT 1 FROM project_members WHERE project_id=$1 AND deleted_at IS NULL UNION ALL SELECT 1 FROM position_assignments WHERE project_id=$1 AND deleted_at IS NULL LIMIT 1'
         : 'SELECT 1 FROM position_assignments WHERE position_id=$1 AND deleted_at IS NULL UNION ALL SELECT 1 FROM staffing_plans WHERE position_id=$1 AND deleted_at IS NULL UNION ALL SELECT 1 FROM salary_budgets WHERE position_id=$1 AND deleted_at IS NULL UNION ALL SELECT 1 FROM recruitment_requests WHERE position_id=$1 AND deleted_at IS NULL LIMIT 1';
     if((await client.query(links,[before.id])).rowCount)throw new GovernanceError('Dữ liệu còn liên kết. Cần xử lý các liên kết trước khi đổi đơn vị hoặc chủ quản.',409);
   }
@@ -109,7 +139,7 @@ async function prepareFields(client, resource, body, user, before, intent) {
     }
   }
   if (resource === 'assignments') {
-    const overlap = await client.query(`SELECT 1 FROM position_assignments WHERE employee_id=$1 AND position_id=$2 AND deleted_at IS NULL AND id<>$3 AND start_date<=COALESCE($4::date,'infinity'::date) AND COALESCE(end_date,'infinity'::date)>=$5::date`, [fields.employee_id, fields.position_id, before?.id || 0, fields.end_date, fields.start_date]);
+    const overlap = await client.query(`SELECT 1 FROM position_assignments WHERE employee_id=$1 AND position_id=$2 AND deleted_at IS NULL AND id<>$3 AND start_date<=COALESCE($4::date,'infinity'::date) AND COALESCE(end_date,'infinity'::date)>=$5::date AND project_id IS NOT DISTINCT FROM $6::int`, [fields.employee_id, fields.position_id, before?.id || 0, fields.end_date, fields.start_date,fields.project_id]);
     if (overlap.rowCount) throw new GovernanceError('Khoảng phân công trùng vị trí của nhân viên');
   }
   if (resource === 'budgets') fields.total_amount = budgetTotal(fields);
@@ -121,6 +151,10 @@ async function prepareFields(client, resource, body, user, before, intent) {
   }
   const action = intent || (before ? 'edit' : 'create');
   if (intent !== 'restore') requireRecord(user, config, action, fields);
+  if(resource==='staffing'&&(intent!=='restore'||before?.position_id==null)){
+    const duplicate=await client.query('SELECT 1 FROM staffing_plans WHERE department_id=$1 AND month=$2 AND position_id IS NULL AND deleted_at IS NULL AND id<>$3',[fields.department_id,fields.month,before?.id||0]);
+    if(duplicate.rowCount)throw new GovernanceError('Phòng ban đã có kế hoạch định biên trong tháng này. Mở kế hoạch hiện có để cập nhật.',409);
+  }
   // References must remain within the granted scope; never allow a self/department grant to attach an unrelated object.
   for (const [key, row] of Object.entries(rows)) {
     if (['parent_id','position_id','project_id','folder_id','customer_id'].includes(key) && row.department_id != null) {
@@ -150,6 +184,7 @@ export async function mutateGovernance(resource, id, body, user, method = 'save'
     if (method !== 'save') {
       if (!before) throw new GovernanceError('Thiếu dữ liệu');
       action = body.action || method;
+      if(resource==='staffing'&&before.position_id!=null&&['submit','approve'].includes(action))throw new GovernanceError('Đây là định biên cũ theo chức vụ. Sửa và lưu tổng định biên phòng ban trước khi gửi duyệt.',409);
       if (action === 'delete' || action === 'restore') {
         requireRecord(user, config, action, before);
         if (action === 'delete' && before.status === 'approved') throw new GovernanceError('Mở lại bản đã duyệt trước khi xóa', 409);
@@ -160,8 +195,8 @@ export async function mutateGovernance(resource, id, body, user, method = 'save'
           if(linked.rowCount)throw new GovernanceError('Thư mục còn thư mục con hoặc tài liệu. Chuyển hoặc lưu trữ nội dung trước khi xóa.',409);
         }
         if(action==='delete'&&resource==='projects'){
-          const linked=await client.query('SELECT 1 FROM tasks WHERE project_id=$1 AND deleted_at IS NULL LIMIT 1',[id]);
-          if(linked.rowCount)throw new GovernanceError('Dự án còn công việc liên kết. Dùng trạng thái tạm dừng/hoàn thành để giữ kế hoạch.',409);
+          const linked=await client.query('SELECT 1 FROM tasks WHERE project_id=$1 AND deleted_at IS NULL UNION ALL SELECT 1 FROM position_assignments WHERE project_id=$1 AND deleted_at IS NULL LIMIT 1',[id]);
+          if(linked.rowCount)throw new GovernanceError('Dự án còn công việc hoặc nhiệm vụ nhân sự liên kết. Dùng trạng thái tạm dừng/hoàn thành để giữ kế hoạch.',409);
         }
         if (action === 'restore') await prepareFields(client, resource, before, user, before, 'restore');
         fields = { deleted_at: action === 'delete' ? new Date().toISOString() : null, deleted_reason: action === 'delete' ? String(body.reason).slice(0,2000) : null };
@@ -169,7 +204,7 @@ export async function mutateGovernance(resource, id, body, user, method = 'save'
         if (!config.workflow || before.deleted_at) throw new GovernanceError('Không thể chuyển trạng thái', 409);
         requireRecord(user, config, action === 'submit' ? 'edit' : 'approve', before);
         if (['reopen','reject'].includes(action) && !String(body.reason || '').trim()) throw new GovernanceError('Cần nhập lý do');
-        const status = assertTransition(before, action, user.id);
+        const status = assertTransition(before, action, user.id, {role:user.role,resource});
         if (action === 'submit' || action === 'approve') {
           if (resource === 'awards') {
             const policy = await client.query("SELECT 1 FROM bonus_policies WHERE id=$1 AND version=$2 AND status='approved' AND deleted_at IS NULL FOR SHARE", [before.policy_id, before.policy_snapshot.version]);
@@ -179,9 +214,13 @@ export async function mutateGovernance(resource, id, body, user, method = 'save'
         fields = { status, feedback: String(body.reason || '').slice(0,2000), reviewed_by: action === 'submit' ? null : user.id, reviewed_at: action === 'submit' ? null : new Date().toISOString() };
       }
     } else {
-      if (before?.deleted_at || config.workflow && before && !['draft','rejected'].includes(before.status)) throw new GovernanceError('Nội dung đang khóa; cần mở lại bản đã duyệt trước khi sửa', 409);
+      const editableStates=resource==='staffing'?['draft','rejected','submitted']:['draft','rejected'];
+      if (before?.deleted_at || config.workflow && before && !editableStates.includes(before.status)) throw new GovernanceError('Nội dung đang khóa; cần mở lại bản đã duyệt trước khi sửa', 409);
       if (before) requireRecord(user, config, 'edit', before);
       fields = await prepareFields(client, resource, body, user, before);
+      if(resource==='staffing'&&before?.status==='submitted'){
+        fields.status='draft';fields.reviewed_by=null;fields.reviewed_at=null;
+      }
       if (!before) fields.created_by = user.id;
     }
     const columns = Object.keys(fields);
@@ -200,6 +239,11 @@ export async function governanceOptions(resource, user) {
   if (scopeFor(user, config.module, 'view') === 'none') throw new GovernanceError('Không có quyền xem', 403);
   const result = {};
   for (const target of new Set(config.fields.filter((field)=>field.type==='reference').map((field)=>field.resource))) {
+    if(resource==='assignments'&&target==='projects'){
+      const projectScope=governanceScope(user,'projects');
+      result.projects=(await query(`SELECT r.id,r.name FROM projects r WHERE r.deleted_at IS NULL AND ${projectScope.sql} ORDER BY r.name,r.id LIMIT 1000`,projectScope.params)).rows;
+      continue;
+    }
     const [table,column] = REFERENCES[target];
     const scope = scopeFor(user, config.module, 'view');
     const params = [];
@@ -209,7 +253,21 @@ export async function governanceOptions(resource, user) {
     else if (scope === 'self' && target !== 'departments') { params.push(user.id); where += ` AND r.owner_id=$${params.length}`; }
     else if (scope === 'self' && target === 'departments') { params.push(user.department_id ?? -1); where += ` AND r.id=$${params.length}`; }
     if (target === 'policies') where += " AND r.status='approved'";
-    result[target] = (await query(`SELECT r.id,r.${column} AS name FROM ${table} r WHERE ${where} ORDER BY r.${column},r.id LIMIT 1000`,params)).rows;
+    const plannedPositions=['recruitment','budgets'].includes(resource)&&target==='positions';
+    result[target] = (await query(`SELECT r.id,r.${column} AS name ${resource==='assignments'&&target==='employees'?',r.position':''} ${plannedPositions?',r.department_id':''} FROM ${table} r WHERE ${where} ORDER BY r.${column},r.id LIMIT 1000`,params)).rows;
+    if(plannedPositions){
+      const args=[];let employeeWhere="e.status='active' AND e.role<>'admin' AND e.department_id IS NOT NULL";
+      if(scope==='department'){args.push(user.department_id??-1);employeeWhere+=' AND e.department_id=$1';}
+      if(scope==='self'){args.push(user.id);employeeWhere+=' AND e.id=$1';}
+      const people=(await query(`SELECT e.id,e.position,e.department_id,d.name AS department_name FROM employees e JOIN departments d ON d.id=e.department_id WHERE ${employeeWhere} ORDER BY e.id`,args)).rows;
+      const seen=new Set(result.positions.map(position=>`${position.department_id}:${position.name.trim().toLocaleLowerCase('vi')}`));
+      for(const person of people)for(const [index,title] of jobTitles(person.position).entries()){
+        const key=`${person.department_id}:${title.toLocaleLowerCase('vi')}`;
+        if(seen.has(key))continue;
+        seen.add(key);result.positions.push({id:`employee:${person.id}:${index}`,name:`${title} — ${person.department_name}`});
+      }
+    }
+
   }
   if(!result[resource]){
     const scope=governanceScope(user,config.module);

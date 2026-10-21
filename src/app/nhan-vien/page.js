@@ -1,15 +1,15 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
-import { Plus, Search, Pencil, UserX, Camera, Loader2, KeyRound } from 'lucide-react';
+import { Plus, Search, Pencil, UserX, Loader2, KeyRound } from 'lucide-react';
 import api from '@/lib/api';
 import Layout from '@/components/Layout';
 import Modal from '@/components/Modal';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Avatar from '@/components/Avatar';
 import { useAuth } from '@/context/AuthContext';
-import usePagedList from '@/lib/usePagedList';
-import LoadMore from '@/components/LoadMore';
+import EmployeeFormFields from '@/components/EmployeeFormFields';
+import {jobTitles} from '@/lib/employee-job-titles';
 
 const ROLE_LABEL = { admin: 'Quản trị viên', director: 'Giám đốc', manager: 'Quản lý', employee: 'Nhân viên' };
 
@@ -20,7 +20,32 @@ function EmployeesContent() {
   const [roles, setRoles] = useState([]);
   const [managerOptions, setManagerOptions] = useState([]);
   const [search, setSearch] = useState('');
-  const { items: employees, hasMore, loadingMore, error: listError, refresh: load, loadMore } = usePagedList('/employees', { search: search || undefined });
+  const [departmentFilter, setDepartmentFilter] = useState('');
+  const [{page,pageSize},setPagination]=useState({page:1,pageSize:10});
+  const [revision,setRevision]=useState(0);
+  const [list,setList]=useState({key:'',items:[],total:0,error:''});
+  const paramsKey=JSON.stringify({search:search||undefined,department_id:departmentFilter||undefined,limit:pageSize,offset:(page-1)*pageSize,include_total:'1'});
+  const requestKey=`${paramsKey}:${revision}`;
+  const loading=list.key!==requestKey;
+  const employees=loading?[]:list.items;
+  const listError=loading?'':list.error;
+  const total=loading?0:list.total;
+  const pageCount=Math.max(1,Math.ceil(total/pageSize));
+  const load=()=>setRevision(value=>value+1);
+  useEffect(()=>{
+    let active=true;
+    const controller=new AbortController();
+    const params=JSON.parse(paramsKey);
+    api.get('/employees',{params,signal:controller.signal}).then(({data})=>{
+      if(!active)return;
+      const lastPage=Math.max(1,Math.ceil(data.total/params.limit));
+      if(params.offset/params.limit+1>lastPage){setPagination(current=>({...current,page:lastPage}));return;}
+      setList({key:requestKey,items:data.items,total:data.total,error:''});
+    }).catch(error=>{
+      if(active)setList({key:requestKey,items:[],total:0,error:error.response?.data?.error||'Không thể tải danh sách nhân viên.'});
+    });
+    return()=>{active=false;controller.abort();};
+  },[paramsKey,requestKey]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({});
@@ -44,14 +69,14 @@ function EmployeesContent() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ full_name: '', email: '', password: '', role: 'employee', position: '', department_id: '', manager_id: '', phone: '', join_date: '' });
+    setForm({ full_name: '', email: '', password: '', role: 'employee', position_titles: [], department_id: '', manager_id: '', phone: '', join_date: '' });
     setError('');
     setModalOpen(true);
   };
 
   const openEdit = (emp) => {
     setEditing(emp);
-    setForm({ ...emp, department_id: emp.department_id || '', manager_id: emp.manager_id || '' });
+    setForm({ ...emp, position_titles: jobTitles(emp.position), department_id: emp.department_id || '', manager_id: emp.manager_id || '' });
     setError('');
     setModalOpen(true);
   };
@@ -99,7 +124,7 @@ function EmployeesContent() {
     setError('');
     try {
       const payload = {
-        full_name: form.full_name?.trim(), position: form.position || null,
+        full_name: form.full_name?.trim(), position_titles: form.position_titles || [],
         department_id: form.department_id || null, manager_id: form.manager_id || null,
         phone: form.phone || null, role: form.role || editing?.role || 'employee',
         status: form.status || editing?.status || 'active', join_date: form.join_date || null,
@@ -161,7 +186,7 @@ function EmployeesContent() {
   return (
     <Layout
       title="Nhân viên"
-      subtitle={`${employees.length} nhân viên đã tải${hasMore ? ' · còn thêm' : ''}`}
+      subtitle={loading?'Đang tải danh sách...':`${total} nhân viên · Trang ${page}/${pageCount}`}
       actions={isManager && <button onClick={openCreate} className="flex items-center gap-1.5 bg-teal hover:bg-teal-dark text-white text-sm font-medium px-4 py-2 rounded-md transition-colors focus-ring">
           <Plus size={16} /> Thêm nhân viên
         </button>}
@@ -170,16 +195,23 @@ function EmployeesContent() {
       {listError && <div role="alert" className="mb-4 text-sm text-clay bg-[#F1DAD5] px-3 py-2 rounded-md">{listError}</div>}
       {notice && <div role="status" className="mb-4 text-sm text-teal bg-[#DEE8D5] px-3 py-2 rounded-md">{notice}</div>}
       {isManager&&<div className="ui-notice mb-4 text-sm">Để cập nhật sơ đồ, sửa Chức vụ, Phòng ban và Quản lý trực tiếp của nhân viên. Vai trò chỉ dùng phân quyền phần mềm; sơ đồ không tự lấy vai trò làm chức vụ.</div>}
-      <div className="relative mb-5 max-w-sm">
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:max-w-3xl">
+      <div className="relative">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate" />
         <input
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {setSearch(e.target.value);setPagination(current=>({...current,page:1}));}}
           placeholder="Tìm theo tên hoặc email..."
           className="w-full pl-9 pr-3 py-2 rounded-md border border-line bg-paper-raised text-sm focus-ring focus:border-teal outline-none"
         />
       </div>
+      <select aria-label="Lọc nhân viên theo phòng ban" value={departmentFilter} onChange={event=>{setDepartmentFilter(event.target.value);setPagination(current=>({...current,page:1}));}} className="ui-field min-w-0">
+        <option value="">Tất cả phòng ban</option>
+        {departments.map(department=><option key={department.id} value={department.id}>{department.name}</option>)}
+      </select>
+      </div>
 
+      {loading?<p role="status" className="ui-card ui-empty">Đang tải danh sách nhân viên...</p>:listError?<button type="button" onClick={load} className="ui-button">Thử lại</button>:!employees.length?<p className="ui-card ui-empty">Không có nhân viên phù hợp.</p>:<>
       <div className="space-y-3 md:hidden">
         {employees.map((emp) => <article key={emp.id} className="min-w-0 rounded-lg border border-line bg-paper-raised p-4 text-sm">
           <div className="flex min-w-0 items-center gap-3 border-b border-line pb-3">
@@ -238,111 +270,25 @@ function EmployeesContent() {
         </table>
       </div>
 
-      <LoadMore hasMore={hasMore} loading={loadingMore} onClick={loadMore} />
+      </>}
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm">
+        <div className="flex flex-wrap items-center gap-3"><label className="flex items-center gap-2">Số dòng<select aria-label="Số nhân viên mỗi trang" value={pageSize} onChange={e=>setPagination({page:1,pageSize:Number(e.target.value)})} className="rounded-md border border-line bg-white px-2 py-2">{[10,20,50,100].map(size=><option key={size} value={size}>{size}</option>)}</select></label>{!loading&&!listError&&<span className="text-slate">{total?(page-1)*pageSize+1:0}–{Math.min(page*pageSize,total)} / {total} nhân viên</span>}</div>
+        <nav aria-label="Phân trang nhân viên" className="flex flex-wrap items-center gap-1">
+          <button type="button" disabled={loading||page===1} onClick={()=>setPagination(current=>({...current,page:current.page-1}))} className="ui-button disabled:opacity-50">Trước</button>
+          {Array.from({length:Math.min(5,pageCount)},(_,index)=>Math.max(1,Math.min(page-2,pageCount-4))+index).map(number=><button type="button" key={number} aria-label={`Trang ${number}`} aria-current={number===page?'page':undefined} disabled={loading} onClick={()=>setPagination(current=>({...current,page:number}))} className={`ui-button ${number===page?'ui-button-primary':'ui-button-secondary'}`}>{number}</button>)}
+          <button type="button" disabled={loading||page>=pageCount||Boolean(listError)} onClick={()=>setPagination(current=>({...current,page:current.page+1}))} className="ui-button disabled:opacity-50">Sau</button>
+        </nav>
+      </div>
+
 
       {modalOpen && (
-        <Modal title={editing ? 'Chỉnh sửa nhân viên' : 'Thêm nhân viên'} onClose={() => { if (!saveLock.current) setModalOpen(false); }}>
-          <form id={employeeFormId} onSubmit={submit} onInvalidCapture={(event) => setError(event.target.validationMessage || 'Vui lòng kiểm tra thông tin chưa hợp lệ.')} aria-busy={saving} className="space-y-3.5">
-            {editing && (
-              <div className="flex items-center gap-3 pb-1">
-                <div className="relative">
-                  <Avatar name={form.full_name} color={editing.avatar_color} avatarPath={form.avatar_path} size={56} />
-                  <button
-                    type="button"
-                    onClick={() => avatarFileRef.current?.click()}
-                    disabled={avatarUploading}
-                    className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-teal hover:bg-teal-dark text-white flex items-center justify-center border-2 border-paper-raised transition-colors focus-ring disabled:opacity-60"
-                  >
-                    {avatarUploading ? <Loader2 size={11} className="animate-spin" /> : <Camera size={11} />}
-                  </button>
-                  <input ref={avatarFileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={uploadAvatar} />
-                </div>
-                <span className="text-xs text-slate">Nhấn biểu tượng máy ảnh để đổi ảnh đại diện</span>
-              </div>
-            )}
-            <div>
-              <label className="block text-xs font-medium text-ink mb-1">Họ và tên *</label>
-              <input required value={form.full_name || ''} onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-                className="w-full px-3 py-2 rounded-md border border-line text-sm focus-ring focus:border-teal outline-none" />
-            </div>
-            {!editing && (
-              <>
-                <div>
-                  <label className="block text-xs font-medium text-ink mb-1">Email</label>
-                  <input required type="email" value={form.email || ''} onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    className="w-full px-3 py-2 rounded-md border border-line text-sm focus-ring focus:border-teal outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-ink mb-1">Mật khẩu ban đầu</label>
-                  <input required type="password" value={form.password || ''} onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    className="w-full px-3 py-2 rounded-md border border-line text-sm focus-ring focus:border-teal outline-none" />
-                </div>
-              </>
-            )}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-ink mb-1">Chức vụ</label>
-                <input value={form.position || ''} onChange={(e) => setForm({ ...form, position: e.target.value })}
-                  className="w-full px-3 py-2 rounded-md border border-line text-sm focus-ring focus:border-teal outline-none" />
-                <p className="mt-1 text-xs text-slate">Chức danh thực tế hiển thị trên sơ đồ.</p>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-ink mb-1">Vai trò</label>
-                <select value={form.role || 'employee'} disabled={user?.role !== 'admin' || editing?.role === 'admin'} onChange={(e) => setForm({ ...form, role: e.target.value, manager_id: e.target.value === 'admin' ? '' : form.manager_id })}
-                  className="w-full px-3 py-2 rounded-md border border-line text-sm focus-ring focus:border-teal outline-none bg-white">
-                  {roles.map((item) => <option key={item.role} value={item.role}>{item.label}</option>)}
-                </select>
-                <p className="mt-1 text-xs text-slate">Quyền đăng nhập, độc lập với chức vụ.</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-ink mb-1">Phòng ban</label>
-                <select value={form.department_id || ''} onChange={(e) => setForm({ ...form, department_id: e.target.value })}
-                  className="w-full px-3 py-2 rounded-md border border-line text-sm focus-ring focus:border-teal outline-none bg-white">
-                  <option value="">— Chọn —</option>
-                  {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                </select>
-              </div>
-              {form.role !== 'admin' && <div>
-                <label htmlFor="manager-id" className="block text-xs font-medium text-ink mb-1">Quản lý trực tiếp</label>
-                <select id="manager-id" value={form.manager_id || ''} onChange={(e) => setForm({ ...form, manager_id: e.target.value })}
-                  className="w-full px-3 py-2 rounded-md border border-line text-sm focus-ring focus:border-teal outline-none bg-white">
-                  <option value="">— Không có —</option>
-                  {managerOptions.filter((person) => person.id !== editing?.id && person.role !== 'admin').map((person) =>
-                    <option key={person.id} value={person.id}>{person.full_name} ({person.position || roles.find((item) => item.role === person.role)?.label || 'Nhân viên'})</option>
-                  )}
-                </select>
-              </div>}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-ink mb-1">Số điện thoại</label>
-                <input value={form.phone || ''} onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  className="w-full px-3 py-2 rounded-md border border-line text-sm focus-ring focus:border-teal outline-none" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-ink mb-1">Ngày vào làm</label>
-                <input type="date" value={form.join_date || ''} onChange={(e) => setForm({ ...form, join_date: e.target.value })}
-                  className="w-full px-3 py-2 rounded-md border border-line text-sm focus-ring focus:border-teal outline-none" />
-              </div>
-              {editing && editing.role !== 'admin' && (
-                <div>
-                  <label className="block text-xs font-medium text-ink mb-1">Trạng thái</label>
-                  <select value={form.status || 'active'} onChange={(e) => setForm({ ...form, status: e.target.value })}
-                    className="w-full px-3 py-2 rounded-md border border-line text-sm focus-ring focus:border-teal outline-none bg-white">
-                    <option value="active">Đang làm việc</option>
-                    <option value="inactive">Đã nghỉ</option>
-                  </select>
-                </div>
-              )}
-            </div>
+        <Modal width="max-w-5xl" title={editing ? 'Chỉnh sửa nhân viên' : 'Thêm nhân viên'} onClose={() => { if (!saveLock.current) setModalOpen(false); }}>
+          <form id={employeeFormId} onSubmit={submit} onInvalidCapture={(event) => setError(event.target.validationMessage || 'Vui lòng kiểm tra thông tin chưa hợp lệ.')} aria-busy={saving} className="space-y-5">
+            <EmployeeFormFields form={form} setForm={setForm} editing={editing} user={user} roles={roles} departments={departments} managerOptions={managerOptions} saving={saving} avatarUploading={avatarUploading} avatarFileRef={avatarFileRef} uploadAvatar={uploadAvatar}/>
 
             {error && <div role="alert" className="text-sm text-clay bg-[#F1DAD5] px-3 py-2 rounded-md">{error}</div>}
 
-            <div className="sticky bottom-0 z-10 flex justify-end gap-2 border-t border-line bg-white py-3">
+            <div className="sticky -bottom-4 z-10 -mx-4 flex justify-end gap-2 border-t border-line bg-white px-4 pb-4 pt-3 sm:-bottom-5 sm:-mx-6 sm:px-6 sm:pb-5">
               <button type="button" disabled={saving} onClick={() => setModalOpen(false)} className="px-4 py-2 rounded-md text-sm text-slate hover:text-ink transition-colors focus-ring disabled:opacity-50">
                 Huỷ
               </button>
