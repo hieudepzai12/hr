@@ -9,6 +9,7 @@ export default function GovernanceFields({resource,fields,form,setForm,options,e
   ...(resource==='assignments'&&key==='employee_id'?{position_title:'',position_id:''}:{}),
  }));
  return fields.map(field=>{
+  if(resource==='projects'&&field.key==='status')return null;
   const value=form[field.key]??'';
   const onChange=value=>update(field.key,value);
   if(resource==='assignments'&&field.key==='position_id')return null;

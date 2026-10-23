@@ -7,6 +7,12 @@ import {jobTitles} from './employee-job-titles';
 import { assertTransition, awardTotal, budgetTotal, GovernanceError, validId, validateGovernanceInput } from './governance-validation';
 
 const REFERENCES = { departments: ['departments', 'name'], employees: ['employees', 'full_name'], customers: ['customers', 'name'], ...Object.fromEntries(Object.entries(GOVERNANCE).map(([key, value]) => [key, [value.table, 'name']])) };
+// Only expose the project's completion flag, never the underlying restricted task data.
+// An empty project (or one containing only cancelled tasks) is not complete.
+const projectCompletion = (alias) => `(EXISTS (SELECT 1 FROM tasks pt WHERE pt.project_id=${alias}.id
+  AND pt.deleted_at IS NULL AND pt.status<>'cancelled') AND NOT EXISTS
+  (SELECT 1 FROM tasks pt WHERE pt.project_id=${alias}.id AND pt.deleted_at IS NULL
+    AND pt.status NOT IN ('done','cancelled'))) AS auto_completed`;
 export const configFor = (key) => { if (!Object.hasOwn(GOVERNANCE, key)) throw new GovernanceError('Không tìm thấy chức năng', 404); return GOVERNANCE[key]; };
 export function requireRecord(user, config, action, record) {
   if (!scopeAllows(user, config.module, action, { ownerId: record.owner_id, departmentId: record.department_id })) throw new GovernanceError('Bạn không có quyền với dữ liệu này', 403);
@@ -56,13 +62,14 @@ export async function listGovernance(resource, searchParams, user) {
     return `(SELECT ${column} FROM ${table} WHERE id=r.${field.key}) AS ${field.key}_label`;
   });
   const actual = resource === 'staffing' ? `, (SELECT COUNT(*)::int FROM employees e WHERE e.department_id=r.department_id AND e.status='active' AND e.role<>'admin') AS actual_count` : '';
-  const rows = await query(`SELECT r.* ${labels.length ? ',' + labels.join(',') : ''} ${actual} FROM ${config.table} r WHERE ${where} ORDER BY r.${sort} ${direction},r.id DESC LIMIT 20 OFFSET $${args.length + 1}`, [...args, (page - 1) * 20]);
+  const completion = resource === 'projects' ? `, ${projectCompletion('r')}` : '';
+  const rows = await query(`SELECT r.* ${labels.length ? ',' + labels.join(',') : ''} ${actual} ${completion} FROM ${config.table} r WHERE ${where} ORDER BY r.${sort} ${direction},r.id DESC LIMIT 20 OFFSET $${args.length + 1}`, [...args, (page - 1) * 20]);
   return { items: rows.rows, total: count.rows[0].total, page, pageSize: 20 };
 }
 export async function detailGovernance(resource, id, user) {
   const config = configFor(resource);
   if (!validId(id)) throw new GovernanceError('ID không hợp lệ');
-  const found = await query(`SELECT * FROM ${config.table} WHERE id=$1`, [id]);
+  const found = await query(`SELECT r.* ${resource==='projects'?`, ${projectCompletion('r')}`:''} FROM ${config.table} r WHERE r.id=$1`, [id]);
   const row = found.rows[0];
   if (!row) throw new GovernanceError('Không tìm thấy dữ liệu', 404);
   requireRecord(user, config, 'view', row);

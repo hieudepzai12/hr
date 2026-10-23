@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowUpRight, CalendarClock, CheckCheck, CircleAlert, ClipboardList, FileText } from 'lucide-react';
-import api from '@/lib/api';
+import api, { getTaskAlerts } from '@/lib/api';
 import Layout from '@/components/Layout';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { useAuth } from '@/context/AuthContext';
@@ -28,11 +28,11 @@ function DashboardContent() {
   const [error, setError] = useState('');
   useEffect(() => {
     let active = true;
-    Promise.all([api.get('/dashboard/stats'), api.get('/tasks/alerts').catch(() => ({ data: { alerts: [] } }))])
+    Promise.all([api.get('/dashboard/stats'), getTaskAlerts(user.id).catch(() => ({ data: { alerts: [] } }))])
       .then(([stats, alerts]) => { if (active) setData({ stats: stats.data, alerts: alerts.data.alerts || [] }); })
       .catch((err) => { if (active) setError(err.response?.data?.error || 'Không tải được dữ liệu tổng quan'); });
     return () => { active = false; };
-  }, []);
+  }, [user.id]);
   const today = vietnamToday();
   const yesterday = new Date(`${today}T00:00:00Z`);
   yesterday.setUTCDate(yesterday.getUTCDate() - 1);

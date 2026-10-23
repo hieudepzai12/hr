@@ -21,7 +21,7 @@ const ok=async(path,cookie,method='GET',body,expected=200)=>{const result=await 
 const add=async(resource,body,actor='admin')=>ok(`/governance/${resource}`,actors[actor].cookie,'POST',body,201);
 const change=async(resource,row,action,actor='reviewer',reason='Local verification')=>ok(`/governance/${resource}/${row.id}`,actors[actor].cookie,'PATCH',{version:row.version,action,reason});
 try{
-  assert.equal((await db.query('SELECT MAX(version)::int AS version FROM schema_migrations')).rows[0].version,8);
+  assert.equal((await db.query('SELECT MAX(version)::int AS version FROM schema_migrations')).rows[0].version,9);
   const midnight=new Date('2026-10-18T17:01:00Z');assert.equal(vietnamToday(midnight),'2026-10-19');
   for(const [due,kind] of [['2026-10-22','upcoming'],['2026-10-20','upcoming'],['2026-10-19','today'],['2026-10-18','overdue']])assert.equal(deadlineAlert({due_date:due,status:'in_progress'},midnight).kind,kind);
   assert.equal(deadlineAlert({due_date:'2026-10-18',status:'review'},midnight).kind,'review');
@@ -74,7 +74,8 @@ try{
   assert.equal((await call('/governance/recruitment',manager,'POST',{name:'Forbidden future role',position_id:'new',position_name:'Denied role',position_department_id:departmentIds[1],quantity:1,hiring_status:'pending',notes:'Cross department'})).status,403);
   const futureBudget=await add('budgets',{name:'Future role budget',position_id:'new',position_name:`Future title ${suffix}`,position_department_id:departmentIds[0],month:'2026-11',headcount:1,base_salary:10000000,notes:'Reuse planned title'});assert.equal(futureBudget.position_id,future.position_id);
   assert.equal((await call('/governance/recruitment',admin,'POST',{...recruitment,hired_count:3})).status,400);
-  const project=await add('projects',{code:`P-${suffix}`,name:`Verification project ${suffix}`,department_id:departmentIds[0],owner_id:actors.admin.id,status:'active',verification_status:'needs_verification'});
+  const project=await add('projects',{code:`P-${suffix}`,name:`Verification project ${suffix}`,department_id:departmentIds[0],status:'active',verification_status:'needs_verification'});
+  assert.equal((await ok(`/governance/projects/${project.id}`,admin)).auto_completed,false,'Empty project must not complete');
   await add('members',{name:'Lead',project_id:project.id,employee_id:actors.employee.id,allocation:100});
   const projectOptions=await ok('/governance/projects?options=1',admin);assert.ok(projectOptions.projects.some(row=>row.id===project.id));
   const task=await ok('/tasks',admin,'POST',{title:`Verify task ${suffix}`,department_id:departmentIds[0],assignee_id:actors.employee.id,project_id:project.id,due_date:'2026-10-22'},201);
@@ -82,6 +83,20 @@ try{
   assert.equal((await call(`/tasks/${task.id}`,actors.other.cookie)).status,403);
   assert.equal((await ok(`/tasks?project_id=${project.id}&limit=20&offset=0`,admin)).items.length,1);
   const projectDetail=await ok(`/governance/projects/${project.id}`,admin);assert.equal(projectDetail.taskSummary[0].count,1);
+  assert.equal(projectDetail.auto_completed,false);
+  await db.query("UPDATE tasks SET status='review',progress=100 WHERE id=$1",[task.id]);
+  assert.equal((await ok(`/governance/projects/${project.id}`,admin)).auto_completed,false,'Awaiting acceptance is incomplete');
+  await db.query("UPDATE tasks SET status='done' WHERE id=$1",[task.id]);
+  assert.equal((await ok(`/governance/projects/${project.id}`,admin)).auto_completed,true);
+  assert.equal((await ok(`/governance/projects?search=${encodeURIComponent(project.name)}`,admin)).items.find(row=>row.id===project.id).auto_completed,true);
+  const pendingProjectTask=await ok('/tasks',admin,'POST',{title:`Pending project task ${suffix}`,department_id:departmentIds[0],assignee_id:actors.employee.id,project_id:project.id},201);
+  assert.equal((await ok(`/governance/projects/${project.id}`,admin)).auto_completed,false,'New pending task reopens completion');
+  await db.query('UPDATE tasks SET deleted_at=NOW() WHERE id=$1',[pendingProjectTask.id]);
+  assert.equal((await ok(`/governance/projects/${project.id}`,admin)).auto_completed,true,'Deleted work is ignored');
+  await db.query("UPDATE tasks SET deleted_at=NULL,status='cancelled' WHERE id=$1",[pendingProjectTask.id]);
+  assert.equal((await ok(`/governance/projects/${project.id}`,admin)).auto_completed,true,'Cancelled work is ignored');
+  await db.query('DELETE FROM tasks WHERE id=$1',[pendingProjectTask.id]);
+  await db.query("UPDATE tasks SET status='todo',progress=0 WHERE id=$1",[task.id]);
   let policy=await add('policies',{code:`BP-${suffix}`,name:'Local percentage policy',calculation:'percentage',rate:2.5,conditions:'Approved test only'});
   policy=await change('policies',policy,'submit','admin');policy=await change('policies',policy,'approve');
   let award=await add('awards',{name:'Local bonus',project_id:project.id,policy_id:policy.id,employee_id:actors.employee.id,basis_amount:100000000,amount:1,notes:'Test award basis'});

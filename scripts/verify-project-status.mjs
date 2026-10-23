@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import { projectStatus } from '../src/lib/project-status.js';
+
+const now = new Date('2026-10-23T03:00:00Z');
+assert.equal(projectStatus({ status: 'active', end_date: '2026-10-22' }, now).label, 'Chậm 1 ngày');
+assert.equal(projectStatus({ status: 'planned', end_date: '2026-10-20' }, now).label, 'Chậm 3 ngày');
+assert.equal(projectStatus({ auto_completed: true, status: 'active', end_date: '2026-10-20' }, now).kind, 'completed');
+assert.equal(projectStatus({ auto_completed: false, status: 'completed', end_date: '2026-10-20' }, now).kind, 'late');
+assert.equal(projectStatus({ status: 'on_hold', end_date: '2026-10-20' }, now).kind, 'late');
+assert.equal(projectStatus({ status: 'active', end_date: '2026-10-23' }, now).kind, 'today');
+assert.equal(projectStatus({ status: 'active', end_date: '2026-10-24' }, now).kind, 'active');
+assert.equal(projectStatus({ status: 'planned', start_date: '2026-10-23' }, now).kind, 'active');
+assert.equal(projectStatus({ status: 'planned', start_date: '2026-10-24' }, now).kind, 'planned');
+assert.equal(projectStatus({ status: 'on_hold' }, now).kind, 'on_hold');
+assert.equal(projectStatus({ status: 'planned' }, now).kind, 'planned');
+const beforeMidnight = new Date('2026-10-23T16:59:59Z');
+const midnight = new Date('2026-10-23T17:00:00Z');
+assert.equal(projectStatus({ status: 'active', end_date: '2026-10-23' }, beforeMidnight).kind, 'today');
+assert.equal(projectStatus({ status: 'active', end_date: '2026-10-23' }, midnight).label, 'Chậm 1 ngày');
+console.log('Project status checks passed: completion, overdue, today, lifecycle, Vietnam midnight');

@@ -12,8 +12,9 @@ await db.connect();
 const suffix = randomUUID().slice(0, 8);
 const password = randomUUID() + randomUUID();
 const ids = {};
-const base = 'http://localhost:3000';
-let taskId, reportId, importedTaskId, evaluationId;
+const base = process.env.VERIFY_BASE_URL || 'http://localhost:3000';
+if (!['localhost', '127.0.0.1'].includes(new URL(base).hostname)) throw new Error('Local API only');
+let taskId, reportId, importedTaskId, evaluationId, sharedTaskId;
 const request = async (path, cookie, method = 'GET', body) => {
   const response = await fetch(base + path, { method, headers: {
     cookie, ...(body ? { 'content-type': 'application/json' } : {}),
@@ -50,12 +51,42 @@ try {
   assert.equal(task.status, 201, `task: ${task.data.error}`);
   taskId = task.data.id;
   assert.equal((await request(`/api/tasks/${taskId}`, other)).status, 403);
+  const ownDashboard = await request('/api/dashboard/stats', employee);
+  const otherDashboard = await request('/api/dashboard/stats', other);
+  assert.equal(ownDashboard.data.tasksByStatus.reduce((sum, item) => sum + item.c, 0), 1);
+  assert.equal(otherDashboard.data.tasksByStatus.length, 0);
+  assert.equal(otherDashboard.data.recentReports.length, 0);
+  assert.equal(ownDashboard.data.totalEmployees, undefined);
+  const deniedReport = await request('/api/reports', other, 'POST', {
+    title: `Denied ${suffix}`, content: 'Must roll back', task_ids: [taskId],
+  });
+  assert.equal(deniedReport.status, 400);
+  assert.equal((await db.query('SELECT count(*)::int AS c FROM reports WHERE title=$1', [`Denied ${suffix}`])).rows[0].c, 0);
+  await db.query(`INSERT INTO task_updates(task_id,employee_id,progress,result,next_step,blockers,solution)
+    VALUES ($1,$2,37,'Own result','Next action','Obstacle','Solution')`, [taskId, ids.employee.id]);
+  sharedTaskId = (await db.query(`INSERT INTO tasks(title,assignee_id,created_by,department_id)
+    VALUES ($1,$2,$3,$4) RETURNING id`, [`Shared ${suffix}`, ids.other.id, ids.admin.id, departments[0].id])).rows[0].id;
+  await db.query('INSERT INTO task_collaborators(task_id,employee_id) VALUES ($1,$2)', [sharedTaskId, ids.employee.id]);
+  await db.query(`INSERT INTO task_updates(task_id,employee_id,progress,result,next_step,blockers,solution)
+    VALUES ($1,$2,63,'Collaborator result','','',''),($1,$3,91,'Other employee result','','','')`,
+  [sharedTaskId, ids.employee.id, ids.other.id]);
   const report = await request('/api/reports', employee, 'POST', {
     title: `Verify week ${suffix}`, content: 'Test snapshot', type: 'weekly',
-    status: 'submitted', period_start: '2026-10-12', period_end: '2026-10-18', task_ids: [taskId],
+    status: 'submitted', period_start: '2026-10-12', period_end: '2026-10-18', task_ids: [taskId, sharedTaskId, taskId],
   });
   assert.equal(report.status, 201, `report: ${report.data.error}`);
   reportId = report.data.id;
+  const snapshot = (await db.query('SELECT snapshot FROM report_items WHERE report_id=$1', [reportId])).rows[0].snapshot;
+  assert.equal(snapshot.progress, 37);
+  assert.equal(snapshot.result, 'Own result');
+  const versionSnapshot = (await db.query('SELECT snapshot FROM report_versions WHERE report_id=$1 AND version=1', [reportId])).rows[0].snapshot;
+  assert.equal(versionSnapshot.items[0].snapshot.progress, 37);
+  assert.equal(versionSnapshot.items.length, 2);
+  assert.equal(versionSnapshot.items[1].task_id, sharedTaskId);
+  assert.equal(versionSnapshot.items[1].snapshot.progress, 63);
+  assert.equal(versionSnapshot.items[1].snapshot.result, 'Collaborator result');
+  await db.query('UPDATE tasks SET progress=99 WHERE id=$1', [taskId]);
+  assert.equal((await db.query('SELECT snapshot FROM report_versions WHERE report_id=$1 AND version=1', [reportId])).rows[0].snapshot.items[0].snapshot.progress, 37);
   assert.equal((await request(`/api/reports/${reportId}`, other)).status, 403);
   const review = await request(`/api/reports/${reportId}/review`, admin, 'PUT', { status: 'approved', feedback: 'OK' });
   assert.equal(review.status, 200, `review: ${review.data.error}`);
@@ -113,6 +144,7 @@ try {
   if (evaluationId) await db.query('DELETE FROM kpi_evaluations WHERE id=$1', [evaluationId]);
   if (reportId) await db.query('DELETE FROM reports WHERE id=$1', [reportId]);
   if (taskId) await db.query('DELETE FROM tasks WHERE id=$1', [taskId]);
+  if (sharedTaskId) await db.query('DELETE FROM tasks WHERE id=$1', [sharedTaskId]);
   if (importedTaskId) await db.query('DELETE FROM tasks WHERE id=$1', [importedTaskId]);
   for (const person of Object.values(ids)) {
     await db.query('DELETE FROM employees WHERE id=$1', [person.id]);

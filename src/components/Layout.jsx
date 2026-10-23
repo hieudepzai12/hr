@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Bell, Menu } from 'lucide-react';
-import api from '@/lib/api';
+import { getTaskAlerts } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import Avatar from './Avatar';
 import Sidebar from './Sidebar';
@@ -24,11 +24,11 @@ export default function Layout({ title, subtitle, actions, children }) {
   useEffect(() => {
     if (!user || !canViewTasks) return;
     let active = true;
-    const refresh = () => api.get('/tasks/alerts').then(({ data }) => {
+    const refresh = () => getTaskAlerts(user.id).then(({ data }) => {
       if (active) setAlerts(data.alerts || []);
     }).catch(() => {});
     refresh();
-    const interval = setInterval(refresh, 60000);
+    const interval = setInterval(() => { if (!document.hidden) refresh(); }, 60000);
     return () => { active = false; clearInterval(interval); };
   }, [user, canViewTasks, pathname]);
   useEffect(() => {
