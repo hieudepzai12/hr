@@ -3,6 +3,16 @@ export function jobTitles(value){
  if(typeof value!=='string')return [];
  return value.split(';').map(title=>title.trim()).filter(Boolean);
 }
+// Department annotations are kept in stored titles for concurrent-role mapping.
+export function displayJobTitles(value,departmentName=''){
+ const normalized=text=>text.normalize('NFC').trim().replace(/\s+/g,' ').toLocaleLowerCase('vi').replace(/^phòng\s+/u,'');
+ return jobTitles(value).map(title=>{
+  const match=title.match(/^(.*?)\s+[—–-]\s+(.+)$/u);
+  if(!match)return title;
+  const suffix=normalized(match[2]);
+  return suffix&&(suffix===normalized(departmentName)||normalized(match[1]).endsWith(` ${suffix}`))?match[1].trim():title;
+ }).join('; ');
+}
 export function employeePosition(body){
  const supplied=Object.hasOwn(body||{},'position_titles');
  const value=supplied?body.position_titles:body?.position;

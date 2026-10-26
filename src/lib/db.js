@@ -5,6 +5,10 @@ import { migrateAuditEntityText } from './migrations/006-audit-entity-text.js';
 import { migratePersonnelDutyProject } from './migrations/007-personnel-duty-project.js';
 import { migrateDepartmentStaffing } from './migrations/008-department-staffing.js';
 import { migrateProjectDepartmentOwner } from './migrations/009-project-department-owner.js';
+import { migratePositionRoleDescription } from './migrations/010-position-role-description.js';
+import { migrateProjectDepartments } from './migrations/011-project-departments.js';
+import { migrateSalaryBudgetGroups } from './migrations/012-salary-budget-groups.js';
+import { migrateDepartmentBonuses } from './migrations/013-department-bonuses.js';
 // DATE has no timezone; preserve yyyy-mm-dd rather than converting through local midnight.
 types.setTypeParser(1082, (value) => value);
 
@@ -89,7 +93,7 @@ export async function queryOne(text, params) {
 }
 
 let schemaReadyPromise = null;
-const SCHEMA_VERSION = 9;
+const SCHEMA_VERSION = 13;
 
 /** Đảm bảo bảng đã được tạo & seed dữ liệu mẫu. Gọi an toàn nhiều lần — chỉ chạy thật sự một lần. */
 export function ensureSchema() {
@@ -421,6 +425,26 @@ export async function migrateSchema() {
     if(!projectOwnerMigration.rows.length){
       await migrateProjectDepartmentOwner(client);
       await client.query('INSERT INTO schema_migrations(version) VALUES (9)');
+    }
+    const positionRoleMigration=await client.query('SELECT 1 FROM schema_migrations WHERE version=10');
+    if(!positionRoleMigration.rowCount){
+      await migratePositionRoleDescription(client);
+      await client.query('INSERT INTO schema_migrations(version) VALUES (10)');
+    }
+    const projectDepartmentsMigration=await client.query('SELECT 1 FROM schema_migrations WHERE version=11');
+    if(!projectDepartmentsMigration.rowCount){
+      await migrateProjectDepartments(client);
+      await client.query('INSERT INTO schema_migrations(version) VALUES (11)');
+    }
+    const salaryGroupsMigration=await client.query('SELECT 1 FROM schema_migrations WHERE version=12');
+    if(!salaryGroupsMigration.rowCount){
+      await migrateSalaryBudgetGroups(client);
+      await client.query('INSERT INTO schema_migrations(version) VALUES (12)');
+    }
+    const departmentBonusMigration=await client.query('SELECT 1 FROM schema_migrations WHERE version=13');
+    if(!departmentBonusMigration.rowCount){
+      await migrateDepartmentBonuses(client);
+      await client.query('INSERT INTO schema_migrations(version) VALUES (13)');
     }
   });
 }

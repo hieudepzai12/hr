@@ -1,4 +1,5 @@
 'use client';
+import useFeedback from '@/lib/useFeedback';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ChevronDown, ChevronRight } from 'lucide-react';
@@ -8,6 +9,7 @@ import Modal from '@/components/Modal';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { useAuth } from '@/context/AuthContext';
 import {personnelChartPeople} from '@/lib/company-structure';
+import {displayJobTitles} from '@/lib/employee-job-titles';
 import Avatar from '@/components/Avatar';
 import FittedOrganizationCanvas from '@/components/FittedOrganizationCanvas';
 
@@ -20,21 +22,22 @@ function OrgNode({person,childrenByParent,onSelect,departmentNames,ancestors=[]}
   const [expanded,setExpanded]=useState(true);
   if(ancestors.includes(person.id))return null;
   const children=childrenByParent.get(person.id)||[];
-  return <li><button type="button" className={`person-node focus-ring ${person.company_level?'person-node--leader':children.length?'person-node--manager':''}`} onClick={()=>onSelect(person)} title={`${person.full_name} — ${person.position?.trim()||'Nhân viên'}`}>
+  const displayTitle=displayJobTitles(person.position,departmentNames.get(person.department_id))||'Nhân viên';
+  return <li><button type="button" className={`person-node focus-ring ${person.company_level?'person-node--leader':children.length?'person-node--manager':''}`} onClick={()=>onSelect(person)} title={`${person.full_name} — ${displayTitle}`}>
     <Avatar name={person.full_name} color={person.company_level?'#405779':'#607fa6'} size={34}/>
-    <span className="min-w-0 flex-1"><span className="person-node-name">{person.full_name}</span><span className="person-node-title">{person.position?.trim()||'Nhân viên'}</span><span className="person-node-meta">{departmentNames.get(person.department_id)||'Chưa phân phòng ban'}</span></span>
+    <span className="min-w-0 flex-1"><span className="person-node-name">{person.full_name}</span><span className="person-node-title">{displayTitle}</span><span className="person-node-meta">{departmentNames.get(person.department_id)||'Chưa phân phòng ban'}</span></span>
   </button>{children.length>0&&<><button type="button" onClick={()=>setExpanded(!expanded)} aria-expanded={expanded} aria-label={`${expanded?'Thu gọn':'Mở rộng'} nhánh ${person.full_name}`} className="person-node-toggle focus-ring">{expanded?<ChevronDown size={13}/>:<ChevronRight size={13}/>} {children.length} vị trí trực thuộc</button>{expanded&&<ul className={children.every(child=>!(childrenByParent.get(child.id)||[]).length)?'personnel-leaf-group':undefined}>{children.map(child=><OrgNode key={child.id} person={child} childrenByParent={childrenByParent} onSelect={onSelect} departmentNames={departmentNames} ancestors={[...ancestors,person.id]}/>)}</ul>}</>}</li>;
 }
 function Content({ mode }){
-  const {can}=useAuth();const [data,setData]=useState(null);const [error,setError]=useState('');const [department,setDepartment]=useState('');const [search,setSearch]=useState('');const [selected,setSelected]=useState(null);
+  const {can}=useAuth();const [data,setData]=useState(null);const [error,setError]=useFeedback('error');const [department,setDepartment]=useState('');const [search,setSearch]=useState('');const [selected,setSelected]=useState(null);
   const [expandVersion,setExpandVersion]=useState(0);
   const [fullscreen,setFullscreen]=useState(false);
-  const [viewNotice,setViewNotice]=useState('');
+  const [viewNotice,setViewNotice]=useFeedback('info');
   const chartPanel=useRef(null);
-  useEffect(()=>{const update=()=>setFullscreen(document.fullscreenElement===chartPanel.current);document.addEventListener('fullscreenchange',update);return()=>document.removeEventListener('fullscreenchange',update);},[]);
+  useEffect(()=>{const update=()=>setFullscreen(document.fullscreenElement===chartPanel.current);document.addEventListener('fullscreenchange',update);return()=>document.removeEventListener('fullscreenchange',update);},[setError]);
   const toggleFullscreen=async()=>{try{setViewNotice('');if(document.fullscreenElement)await document.exitFullscreen();else await chartPanel.current?.requestFullscreen();}catch{setViewNotice('Trình duyệt không mở được toàn màn hình. Bạn vẫn có thể cuộn trong khung sơ đồ.');}};
   const selectPerson=async(person)=>{if(document.fullscreenElement)await document.exitFullscreen().catch(()=>{});setSelected(person);};
-  useEffect(()=>{let active=true;api.get('/organization').then(({data})=>{if(active)setData(data);}).catch(err=>{if(active)setError(err.response?.data?.error||'Không tải được sơ đồ');});return()=>{active=false;};},[]);
+  useEffect(()=>{let active=true;api.get('/organization').then(({data})=>{if(active)setData(data);}).catch(err=>{if(active)setError(err.response?.data?.error||'Không tải được sơ đồ');});return()=>{active=false;};},[setError]);
   const departments=data?.departments||[];
   const departmentNames=new Map(departments.map(d=>[d.id,d.name]));
   const selectedDepartment=mode==='company'?'':department;
@@ -63,7 +66,7 @@ function Content({ mode }){
     {view==='positions'&&data&&<p className="mb-3 text-sm text-slate">Các mục cần xác minh chưa được coi là phân công nhân sự chính thức. Mở từng ô để xem đầy đủ nhiệm vụ, tên theo tài liệu và nguồn.</p>}
     {viewNotice&&<p role="status" className="ui-notice mb-3">{viewNotice}</p>}
     {error?<p role="alert" className="ui-notice">{error}</p>:!data?<p role="status" className="ui-card ui-empty">Đang tải sơ đồ...</p>:!roots.length?<p className="ui-card ui-empty">Chưa có dữ liệu phù hợp hoặc dữ liệu quan hệ cần được kiểm tra.</p>:<section ref={chartPanel} className="personnel-chart-panel ui-card min-w-0 overflow-hidden bg-white"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3"><div><h2 className="text-sm font-semibold text-ink">{selectedDepartment?departmentNames.get(Number(selectedDepartment)):'Toàn bộ nhân sự'}</h2><p className="mt-1 text-xs text-slate">{new Set(people.map(person=>person.source_employee_id||person.id)).size} người · {people.length} vị trí</p></div><div className="flex flex-wrap items-center gap-2"><button type="button" className="ui-button" onClick={()=>{setDepartment('');setSearch('');setExpandVersion(v=>v+1);}}>Xem toàn bộ</button><button type="button" className="ui-button" onClick={toggleFullscreen}>{fullscreen?'Thoát toàn màn hình':'Toàn màn hình'}</button></div></div><FittedOrganizationCanvas><div className="org-tree personnel-tree personnel-tree--horizontal"><ul>{roots.map(person=><OrgNode key={`${view}-${person.id}-${expandVersion}`} person={person} childrenByParent={childrenByParent} onSelect={selectPerson} departmentNames={departmentNames}/>)}</ul></div></FittedOrganizationCanvas></section>}
-    {selected&&<Modal title={selected.isPosition?selected.position:selected.full_name} onClose={()=>setSelected(null)}><dl className="space-y-4 text-sm"><div><dt className="text-slate">Chức danh</dt><dd>{selected.position||'Chưa cập nhật'}</dd></div><div><dt className="text-slate">Nhân sự</dt><dd>{selected.full_name}</dd></div><div><dt className="text-slate">Phòng ban</dt><dd>{data.departments.find(item=>item.id===selected.department_id)?.name||'Chưa xác định'}</dd></div>{selected.isPosition&&<><div><dt className="text-slate">Xác minh</dt><dd>{selected.verification_status==='verified'?'Đã xác minh':'Cần xác minh'}</dd></div><div><dt className="text-slate">Chức năng và nhiệm vụ</dt><dd className="whitespace-pre-wrap">{selected.responsibilities}</dd></div><div><dt className="text-slate">Yêu cầu / quyền hạn</dt><dd className="whitespace-pre-wrap">{selected.requirements||'Chưa cập nhật'}</dd></div><div><dt className="text-slate">Nguồn</dt><dd>{selected.source_reference||'Chưa xác định'}</dd></div></>}</dl></Modal>}
+    {selected&&<Modal title={selected.isPosition?displayJobTitles(selected.position,departmentNames.get(selected.department_id)):selected.full_name} onClose={()=>setSelected(null)}><dl className="space-y-4 text-sm"><div><dt className="text-slate">Chức danh</dt><dd>{displayJobTitles(selected.position,departmentNames.get(selected.department_id))||'Chưa cập nhật'}</dd></div><div><dt className="text-slate">Nhân sự</dt><dd>{selected.full_name}</dd></div><div><dt className="text-slate">Phòng ban</dt><dd>{data.departments.find(item=>item.id===selected.department_id)?.name||'Chưa xác định'}</dd></div>{selected.isPosition&&<><div><dt className="text-slate">Xác minh</dt><dd>{selected.verification_status==='verified'?'Đã xác minh':'Cần xác minh'}</dd></div><div><dt className="text-slate">Chức năng và nhiệm vụ</dt><dd className="whitespace-pre-wrap">{selected.responsibilities}</dd></div><div><dt className="text-slate">Yêu cầu / quyền hạn</dt><dd className="whitespace-pre-wrap">{selected.requirements||'Chưa cập nhật'}</dd></div><div><dt className="text-slate">Nguồn</dt><dd>{selected.source_reference||'Chưa xác định'}</dd></div></>}</dl></Modal>}
   </Layout>;
 }
 export default function OrganizationChart({ mode='company' }){

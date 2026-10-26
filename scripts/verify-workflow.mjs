@@ -44,12 +44,23 @@ try {
   assert.equal((await request('/api/dashboard/stats', admin)).status, 200);
   assert.equal((await request('/api/dashboard/stats', employee)).status, 200);
   assert.equal((await request('/api/tasks/alerts', employee)).status, 200);
-  const task = await request('/api/tasks', admin, 'POST', {
-    title: `Verify task ${suffix}`, assignee_id: ids.employee.id,
+  const deniedAssignment = await request('/api/tasks', employee, 'POST', {
+    title: `Denied assignment ${suffix}`, assignee_id: ids.other.id,
+  });
+  assert.equal(deniedAssignment.status, 403, 'Employee cannot create work for another person');
+  const task = await request('/api/tasks', employee, 'POST', {
+    title: `Verify task ${suffix}`,
     department_id: departments[0].id, due_date: '2026-10-18', status: 'todo', progress: 0,
   });
   assert.equal(task.status, 201, `task: ${task.data.error}`);
   taskId = task.data.id;
+  assert.equal(Number(task.data.assignee_id), Number(ids.employee.id), 'Self-created work belongs to the employee');
+  const page = await request(`/api/tasks?limit=1&offset=0&include_total=1&search=${encodeURIComponent(suffix)}`, employee);
+  assert.equal(page.data.total, 1, 'Pagination total respects search and employee scope');
+  assert.equal(page.data.items.length, 1);
+  const emptyPage = await request(`/api/tasks?limit=1&offset=1&include_total=1&search=${encodeURIComponent(suffix)}`, employee);
+  assert.equal(emptyPage.data.total, 1);
+  assert.equal(emptyPage.data.items.length, 0);
   assert.equal((await request(`/api/tasks/${taskId}`, other)).status, 403);
   const ownDashboard = await request('/api/dashboard/stats', employee);
   const otherDashboard = await request('/api/dashboard/stats', other);

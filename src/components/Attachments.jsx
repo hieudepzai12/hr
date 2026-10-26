@@ -1,4 +1,6 @@
 'use client';
+import { confirmAction, notify } from '@/lib/feedback';
+import useFeedback from '@/lib/useFeedback';
 
 import { useEffect, useRef, useState } from 'react';
 import { Paperclip, Download, Trash2, Loader2, Upload } from 'lucide-react';
@@ -19,7 +21,7 @@ export default function Attachments({ kind, entityId, canManage = true }) {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState('');
+  const [error,setError]=useFeedback('error');
   const fileRef = useRef(null);
 
   const load = () => {
@@ -37,7 +39,7 @@ export default function Attachments({ kind, entityId, canManage = true }) {
       .catch(() => { if (active) setError('Không thể tải danh sách file'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [entityId, kind]);
+  }, [entityId, kind, setError]);
 
   const handleUpload = async (e) => {
     const selected = Array.from(e.target.files || []);
@@ -48,6 +50,7 @@ export default function Attachments({ kind, entityId, canManage = true }) {
       const formData = new FormData();
       selected.forEach((f) => formData.append('files', f));
       await api.post(`/${kind}/${entityId}/attachments`, formData);
+      void notify('Đã tải file đính kèm.');
       load();
     } catch (err) {
       setError(err.response?.data?.error || 'Tải file thất bại');
@@ -74,9 +77,12 @@ export default function Attachments({ kind, entityId, canManage = true }) {
   };
 
   const remove = async (att) => {
-    if (!confirm(`Xoá file "${att.original_name}"?`)) return;
-    await api.delete(`/${kind}/${entityId}/attachments/${att.id}`);
-    load();
+    if (!await confirmAction(`Xoá file "${att.original_name}"?`)) return;
+    try {
+      await api.delete(`/${kind}/${entityId}/attachments/${att.id}`);
+      void notify('Đã xóa file đính kèm.');
+      load();
+    } catch (err) { setError(err.response?.data?.error || 'Không xóa được file đính kèm.'); }
   };
 
   return (

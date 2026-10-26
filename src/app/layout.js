@@ -1,4 +1,5 @@
 import "./globals.css";
+import 'sweetalert2/dist/sweetalert2.min.css';
 import { AuthProvider } from "@/context/AuthContext";
 
 export const metadata = {

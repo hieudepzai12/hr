@@ -26,6 +26,10 @@ export function buildTaskPlanQuery({ userId, departmentId, viewScope, printScope
   addScope(viewScope);
   addScope(printScope);
   if(filters.mine==='1')addScope('self');
+  if (filters.search?.trim()) {
+    params.push(`%${filters.search.trim().slice(0, 500)}%`);
+    where.push(`(t.title ILIKE $${params.length} OR e.full_name ILIKE $${params.length} OR c.name ILIKE $${params.length})`);
+  }
 
   for (const [key, column] of Object.entries({ assignee_id: 't.assignee_id', department_id: 't.department_id', customer_id: 't.customer_id', project_id: 't.project_id' })) {
     if (!filters[key]) continue;

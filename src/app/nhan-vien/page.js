@@ -1,4 +1,7 @@
 'use client';
+import { confirmAction } from '@/lib/feedback';
+import useFeedback, { useFeedbackEffect } from '@/lib/useFeedback';
+import Pagination from '@/components/Pagination';
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { Plus, Search, Pencil, UserX, Loader2, KeyRound } from 'lucide-react';
@@ -29,6 +32,7 @@ function EmployeesContent() {
   const loading=list.key!==requestKey;
   const employees=loading?[]:list.items;
   const listError=loading?'':list.error;
+  useFeedbackEffect(listError);
   const total=loading?0:list.total;
   const pageCount=Math.max(1,Math.ceil(total/pageSize));
   const load=()=>setRevision(value=>value+1);
@@ -49,16 +53,16 @@ function EmployeesContent() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({});
-  const [error, setError] = useState('');
+  const [error,setError]=useFeedback('error');
   const [saving, setSaving] = useState(false);
   const saveLock = useRef(false);
   const employeeFormId = useId();
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [passwordTarget, setPasswordTarget] = useState(null);
   const [passwordForm, setPasswordForm] = useState({ current_password: '', new_password: '', confirm_password: '' });
-  const [passwordError, setPasswordError] = useState('');
+  const [passwordError,setPasswordError]=useFeedback('error');
   const [passwordSaving, setPasswordSaving] = useState(false);
-  const [notice, setNotice] = useState('');
+  const [notice,setNotice]=useFeedback('success');
   const avatarFileRef = useRef(null);
 
   useEffect(() => { api.get('/departments').then(({ data }) => setDepartments(data)); }, []);
@@ -147,7 +151,7 @@ function EmployeesContent() {
   };
 
   const deactivate = async (id) => {
-    if (!confirm('Vô hiệu hoá nhân viên này?')) return;
+    if (!await confirmAction('Vô hiệu hoá nhân viên này?')) return;
     try {
       await api.delete(`/employees/${id}`);
       load();
@@ -193,7 +197,7 @@ function EmployeesContent() {
     >
       {!modalOpen && error && <div role="alert" className="mb-4 text-sm text-clay bg-[#F1DAD5] px-3 py-2 rounded-md">{error}</div>}
       {listError && <div role="alert" className="mb-4 text-sm text-clay bg-[#F1DAD5] px-3 py-2 rounded-md">{listError}</div>}
-      {notice && <div role="status" className="mb-4 text-sm text-teal bg-[#DEE8D5] px-3 py-2 rounded-md">{notice}</div>}
+
       {isManager&&<div className="ui-notice mb-4 text-sm">Để cập nhật sơ đồ, sửa Chức vụ, Phòng ban và Quản lý trực tiếp của nhân viên. Vai trò chỉ dùng phân quyền phần mềm; sơ đồ không tự lấy vai trò làm chức vụ.</div>}
       <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:max-w-3xl">
       <div className="relative">
@@ -271,15 +275,7 @@ function EmployeesContent() {
       </div>
 
       </>}
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm">
-        <div className="flex flex-wrap items-center gap-3"><label className="flex items-center gap-2">Số dòng<select aria-label="Số nhân viên mỗi trang" value={pageSize} onChange={e=>setPagination({page:1,pageSize:Number(e.target.value)})} className="rounded-md border border-line bg-white px-2 py-2">{[10,20,50,100].map(size=><option key={size} value={size}>{size}</option>)}</select></label>{!loading&&!listError&&<span className="text-slate">{total?(page-1)*pageSize+1:0}–{Math.min(page*pageSize,total)} / {total} nhân viên</span>}</div>
-        <nav aria-label="Phân trang nhân viên" className="flex flex-wrap items-center gap-1">
-          <button type="button" disabled={loading||page===1} onClick={()=>setPagination(current=>({...current,page:current.page-1}))} className="ui-button disabled:opacity-50">Trước</button>
-          {Array.from({length:Math.min(5,pageCount)},(_,index)=>Math.max(1,Math.min(page-2,pageCount-4))+index).map(number=><button type="button" key={number} aria-label={`Trang ${number}`} aria-current={number===page?'page':undefined} disabled={loading} onClick={()=>setPagination(current=>({...current,page:number}))} className={`ui-button ${number===page?'ui-button-primary':'ui-button-secondary'}`}>{number}</button>)}
-          <button type="button" disabled={loading||page>=pageCount||Boolean(listError)} onClick={()=>setPagination(current=>({...current,page:current.page+1}))} className="ui-button disabled:opacity-50">Sau</button>
-        </nav>
-      </div>
-
+      <Pagination page={page} pageSize={pageSize} total={total} loading={loading} error={listError} onPageChange={page => setPagination(current => ({...current,page}))} onPageSizeChange={pageSize => setPagination({page:1,pageSize})} />
 
       {modalOpen && (
         <Modal width="max-w-5xl" title={editing ? 'Chỉnh sửa nhân viên' : 'Thêm nhân viên'} onClose={() => { if (!saveLock.current) setModalOpen(false); }}>

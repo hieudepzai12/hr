@@ -1,0 +1,7 @@
+'use client';
+import { vnd } from '@/lib/governance-config';
+import { ReportStatusBadge } from './Badges';
+
+export default function BonusAwardTable({items,onOpen}) {
+  return <div className="ui-card max-w-full overflow-x-auto" role="region" aria-label="Các khoản thưởng nhân sự" tabIndex={0}><table className="ui-table min-w-[900px]"><thead><tr><th>Đối tượng / dự án</th><th>Thưởng phòng / tiền cũ</th><th>Tiền theo %</th><th>Tổng thưởng</th><th>Trạng thái</th></tr></thead><tbody>{items.map(row=><tr key={row.id}><td><button type="button" onClick={()=>onOpen(row)} className="text-left font-semibold text-teal hover:underline">{row.name}</button><p className="mt-1 text-sm">{row.award_scope==='department'?row.department_id_label:row.employee_id_label}</p><p className="mt-1 text-xs text-slate">{row.project_id_label}</p><p className="mt-1 text-xs text-slate">{row.award_scope==='department'?'Tổng thưởng phòng ban':row.award_scope==='employee'?'Phần trăm nhân sự':'Khoản thưởng cũ'}</p></td><td className="whitespace-nowrap">{vnd(row.fixed_amount)}</td><td className="whitespace-nowrap">{vnd(row.percentage_amount)}<span className="block text-xs text-slate">{Number(row.policy_snapshot?.rate||0).toLocaleString('vi-VN',{maximumFractionDigits:4})}%</span></td><td className="whitespace-nowrap font-semibold">{vnd(row.amount)}</td><td><ReportStatusBadge status={row.status}/></td></tr>)}</tbody></table></div>;
+}

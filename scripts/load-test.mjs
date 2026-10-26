@@ -56,6 +56,7 @@ try {
   const port = listener.address().port;
   await new Promise(resolve => listener.close(resolve));
   const base = `http://127.0.0.1:${port}`;
+  env.BETTER_AUTH_URL = base;
   server = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'start', '--hostname', '127.0.0.1', '--port', String(port)], { env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   server.stdout.on('data', data => { serverOutput += data; });
   server.stderr.on('data', data => { serverOutput += data; });
@@ -68,7 +69,9 @@ try {
   if (process.argv.includes('--verify-workflow')) {
     if (remote) throw new Error('Workflow verification is local only');
     await run(['scripts/verify-workflow.mjs'], { VERIFY_BASE_URL: base });
-    await run(['scripts/verify-governance.mjs'], { VERIFY_BASE_URL: base });
+    if(process.argv.includes('--verify-migration'))await run(['scripts/verify-governance-migration.mjs']);
+    await run(['scripts/verify-governance.mjs', ...(process.argv.includes('--browser-duties')?['--browser-duties']:[]), ...(process.argv.includes('--browser-chart')?['--browser-chart']:[]), ...(process.argv.includes('--browser-tasks')?['--browser-tasks']:[]), ...(process.argv.includes('--browser-menus')?['--browser-menus']:[]), ...(process.argv.includes('--browser-feedback')?['--browser-feedback']:[])], { VERIFY_BASE_URL: base });
+    if (process.argv.includes('--verify-menus')) await run(['scripts/verify-menu-links.mjs'], { VERIFY_BASE_URL: base });
     console.log('Workflow verification passed (scope, snapshots, lock, versions, restore, Excel, KPI)');
   }
   let samples = [];

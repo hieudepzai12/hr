@@ -5,6 +5,7 @@ import { GOVERNANCE } from '@/lib/governance-config';
 import { governanceScope } from '@/lib/governance-service';
 import { governanceResponse } from '@/lib/governance-response';
 import { GovernanceError } from '@/lib/governance-validation';
+import { budgetScope } from '@/lib/salary-budget';
 
 export const GET = withAuth(async(req,ctx,user)=>governanceResponse(async()=>{
   if(scopeFor(user,'insights','view')==='none') throw new GovernanceError('Không có quyền báo cáo quản trị',403);
@@ -22,7 +23,7 @@ export const GET = withAuth(async(req,ctx,user)=>governanceResponse(async()=>{
   for(const resource of ['positions','assignments','staffing','recruitment','projects','awards','budgets','documents']){
     const config=GOVERNANCE[resource];
     if(scopeFor(user,config.module,'view')==='none') continue;
-    const scope=governanceScope(user,config.module);
+    const scope=resource==='budgets'?budgetScope(user):governanceScope(user,config.module);
     const insights=governanceScope(user,'insights','view','r',scope.params.length+1);
     const args=[...scope.params,...insights.params];
     let where=`r.deleted_at IS NULL AND ${scope.sql} AND ${insights.sql}`;

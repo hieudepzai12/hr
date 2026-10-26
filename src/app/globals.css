@@ -40,6 +40,26 @@ h1, h2, h3, .font-display {
 button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; }
+.swal2-container { z-index: 2000; }
+.swal2-popup.otis-alert {
+  max-width: calc(100vw - 24px);
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  font-family: var(--font-body);
+  color: var(--color-ink);
+}
+.otis-alert .swal2-title { font-size: 17px; line-height: 1.5; }
+.otis-alert.swal2-toast .swal2-title { font-size: 14px; font-weight: 600; }
+.otis-alert .swal2-html-container { font-size: 14px; line-height: 1.6; }
+.otis-alert .swal2-textarea { font-family: inherit; font-size: 14px; }
+.otis-alert .swal2-actions button { font-size: 14px; font-weight: 600; border-radius: 8px; }
+@media print { .swal2-container { display: none !important; } }
+.sidebar-menu-item {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+}
 input, select, textarea { accent-color: var(--color-teal); }
 
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible,
@@ -247,7 +267,7 @@ textarea:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
 .personnel-fit-controls span { min-width: 40px; text-align: center; font-size: 11px; color: #526680; }
 .personnel-fit-controls .personnel-fit-reset { padding: 0 8px; border-left: 1px solid #e2e8f0; border-radius: 0 5px 5px 0; }
 .personnel-fit-scroll { width: 100%; height: 100%; overflow: auto; }
-.personnel-fit-space { display: flex; align-items: center; justify-content: center; min-width: 100%; min-height: 100%; padding: 48px 24px 24px; }
+.personnel-fit-space { display: flex; align-items: center; justify-content: center; width: max-content; min-width: 100%; min-height: 100%; padding: 48px 24px 24px; }
 .personnel-fit-canvas .personnel-tree--horizontal { min-width: max-content; }
 .personnel-fit-canvas .personnel-tree--horizontal ul { display: flex; justify-content: center; padding-top: 20px; }
 .personnel-fit-canvas .personnel-tree--horizontal li { display: flex; flex-direction: column; align-items: center; padding: 20px 10px 0; }

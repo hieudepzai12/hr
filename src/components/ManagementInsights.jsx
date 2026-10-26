@@ -1,4 +1,5 @@
 'use client';
+import useFeedback from '@/lib/useFeedback';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import api from '@/lib/api';
@@ -7,8 +8,8 @@ import { scopeFor } from '@/lib/access';
 import { GOVERNANCE, vnd } from '@/lib/governance-config';
 export default function ManagementInsights({compact=false}){
   const {user}=useAuth();const enabled=scopeFor(user,'insights','view')!=='none';
-  const [month,setMonth]=useState('');const [data,setData]=useState(null);const [error,setError]=useState('');
-  const load=useCallback(async()=>{if(!enabled)return;setData(null);setError('');try{const {data}=await api.get('/governance/insights',{params:{month:month||undefined}});setData(data);}catch(err){setError(err.response?.data?.error||'Không tải được báo cáo quản trị');}},[enabled,month]);
+  const [month,setMonth]=useState('');const [data,setData]=useState(null);const [error,setError]=useFeedback('error');
+  const load=useCallback(async()=>{if(!enabled)return;setData(null);setError('');try{const {data}=await api.get('/governance/insights',{params:{month:month||undefined}});setData(data);}catch(err){setError(err.response?.data?.error||'Không tải được báo cáo quản trị');}},[enabled,month,setError]);
   useEffect(()=>{const timer=setTimeout(load,0);return()=>clearTimeout(timer);},[load]);
   if(!enabled)return null;
   return <section className="ui-card my-5 min-w-0 p-4 sm:p-5"><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">Tổng hợp quản trị</h2><p className="mt-1 text-xs text-slate">Số liệu trong phạm vi được xem; tiền chỉ tổng hợp các bản đã duyệt.</p></div><label className="text-xs text-slate">Tháng định biên / ngân sách<input type="month" value={month} onChange={e=>setMonth(e.target.value)} className="ui-field mt-1"/></label></div>{error?<div role="alert" className="ui-notice">{error}<button onClick={load} className="ml-3 underline">Thử lại</button></div>:!data?<p role="status" className="text-sm text-slate">Đang tổng hợp...</p>:!data.summaries.length?<p className="ui-empty">Chưa được cấp quyền xem dữ liệu các phân hệ.</p>:<div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-3">{data.summaries.map(summary=>{

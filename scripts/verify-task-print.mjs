@@ -20,4 +20,8 @@ assert.match(department.sql, /t\.due_date <= \$5/);
 assert.throws(() => buildTaskPlanQuery({ ...base, printScope: 'none' }), /FORBIDDEN/);
 assert.throws(() => buildTaskPlanQuery({ ...base, filters: { from: '2026-02-30' } }), /Ngày lọc/);
 assert.throws(() => buildTaskPlanQuery({ ...base, filters: { assignee_id: '1 OR 1=1' } }), /Bộ lọc/);
+const searched = buildTaskPlanQuery({ ...base, printScope: 'self', filters: { search: "Hải Ân'; DROP TABLE tasks; --" } });
+assert.deepEqual(searched.params, [7, "%Hải Ân'; DROP TABLE tasks; --%"]);
+assert.match(searched.sql, /t\.title ILIKE \$2 OR e\.full_name ILIKE \$2 OR c\.name ILIKE \$2/);
+assert.doesNotMatch(searched.sql, /DROP TABLE/);
 process.stdout.write('Đã kiểm tra phạm vi quyền và bộ lọc bản in công việc.\n');

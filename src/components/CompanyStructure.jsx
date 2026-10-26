@@ -1,4 +1,5 @@
 'use client';
+import useFeedback from '@/lib/useFeedback';
 import {useEffect,useState} from 'react';
 import Layout from './Layout';
 import MonthInput from './MonthInput';
@@ -17,8 +18,8 @@ function PositionBranch({node}){
 function Content(){
  const {can}=useAuth();
  const [month,setMonth]=useState(()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit'}).format(new Date()));
- const [data,setData]=useState(null),[error,setError]=useState('');
- useEffect(()=>{if(!month)return;let active=true;api.get('/organization',{params:{month}}).then(({data})=>{if(active)setData(data);}).catch(e=>{if(active)setError(e.response?.data?.error||'Không tải được cơ cấu công ty.');});return()=>{active=false;};},[month]);
+ const [data,setData]=useState(null),[error,setError]=useFeedback('error');
+ useEffect(()=>{if(!month)return;let active=true;api.get('/organization',{params:{month}}).then(({data})=>{if(active)setData(data);}).catch(e=>{if(active)setError(e.response?.data?.error||'Không tải được cơ cấu công ty.');});return()=>{active=false;};},[month,setError]);
  const departments=(data?.departments||[]).filter(d=>!['ban giam doc','ban giam doc cong ty'].includes(d.name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').toLowerCase().trim()));
  const employees=data?.employees||[];
  const directors=employees.filter(isCompanyLeader);

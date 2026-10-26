@@ -1,4 +1,5 @@
 'use client';
+import useFeedback from '@/lib/useFeedback';
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -25,14 +26,14 @@ function StatCard({ label, value, icon: Icon, tone, href, caption }) {
 function DashboardContent() {
   const { user } = useAuth();
   const [data, setData] = useState(null);
-  const [error, setError] = useState('');
+  const [error,setError]=useFeedback('error');
   useEffect(() => {
     let active = true;
     Promise.all([api.get('/dashboard/stats'), getTaskAlerts(user.id).catch(() => ({ data: { alerts: [] } }))])
       .then(([stats, alerts]) => { if (active) setData({ stats: stats.data, alerts: alerts.data.alerts || [] }); })
       .catch((err) => { if (active) setError(err.response?.data?.error || 'Không tải được dữ liệu tổng quan'); });
     return () => { active = false; };
-  }, [user.id]);
+  }, [user.id,setError]);
   const today = vietnamToday();
   const yesterday = new Date(`${today}T00:00:00Z`);
   yesterday.setUTCDate(yesterday.getUTCDate() - 1);

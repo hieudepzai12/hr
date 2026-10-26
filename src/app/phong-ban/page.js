@@ -1,4 +1,6 @@
 'use client';
+import { confirmAction, notify } from '@/lib/feedback';
+import useFeedback from '@/lib/useFeedback';
 
 import { useEffect, useState } from 'react';
 import { Plus, Pencil, Trash2, Building2 } from 'lucide-react';
@@ -15,10 +17,14 @@ function DepartmentsContent() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ name: '', description: '' });
-  const [error, setError] = useState('');
+  const [error,setError]=useFeedback('error');
 
-  const load = () => api.get('/departments').then(({ data }) => setDepartments(data));
-  useEffect(() => { load(); }, []);
+  const load = () => api.get('/departments').then(({ data }) => setDepartments(data)).catch(() => setError('Không tải được phòng ban.'));
+  useEffect(() => {
+    let active = true;
+    api.get('/departments').then(({data}) => { if (active) setDepartments(data); }).catch(() => { if (active) setError('Không tải được phòng ban.'); });
+    return () => { active = false; };
+  }, [setError]);
 
   const openCreate = () => {
     setEditing(null);
@@ -41,6 +47,7 @@ function DepartmentsContent() {
       if (editing) await api.put(`/departments/${editing.id}`, form);
       else await api.post('/departments', form);
       setModalOpen(false);
+      void notify(editing ? 'Đã lưu thay đổi phòng ban.' : 'Đã thêm phòng ban.');
       load();
     } catch (err) {
       setError(err.response?.data?.error || 'Có lỗi xảy ra');
@@ -48,9 +55,12 @@ function DepartmentsContent() {
   };
 
   const remove = async (dept) => {
-    if (!confirm(`Xoá phòng ban "${dept.name}"? Nhân viên thuộc phòng ban này sẽ không còn thuộc phòng ban nào.`)) return;
-    await api.delete(`/departments/${dept.id}`);
-    load();
+    if (!await confirmAction(`Xoá phòng ban "${dept.name}"? Nhân viên thuộc phòng ban này sẽ không còn thuộc phòng ban nào.`)) return;
+    try {
+      await api.delete(`/departments/${dept.id}`);
+      void notify('Đã xóa phòng ban.');
+      load();
+    } catch (err) { setError(err.response?.data?.error || 'Không xóa được phòng ban.'); }
   };
 
   return (
@@ -71,11 +81,11 @@ function DepartmentsContent() {
                 <Building2 size={17} className="text-teal" />
               </div>
               <div className="flex items-center gap-1">
-                <button onClick={() => openEdit(d)} className="p-1.5 text-slate hover:text-teal transition-colors focus-ring rounded">
+                <button aria-label={`Sửa phòng ban ${d.name}`} title="Sửa phòng ban" onClick={() => openEdit(d)} className="p-1.5 text-slate hover:text-teal transition-colors focus-ring rounded">
                   <Pencil size={14} />
                 </button>
                 {isAdmin && (
-                  <button onClick={() => remove(d)} className="p-1.5 text-slate hover:text-clay transition-colors focus-ring rounded">
+                  <button aria-label={`Xóa phòng ban ${d.name}`} title="Xóa phòng ban" onClick={() => remove(d)} className="p-1.5 text-slate hover:text-clay transition-colors focus-ring rounded">
                     <Trash2 size={14} />
                   </button>
                 )}

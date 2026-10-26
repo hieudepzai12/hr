@@ -39,9 +39,21 @@ export const GET = withAuth(async (req, ctx, user) => {
   if (searchParams.get('from')) { params.push(searchParams.get('from')); sql += ` AND t.due_date >= $${params.length}`; }
   if(searchParams.get('mine')==='1'){params.push(user.id);sql+=` AND (t.assignee_id=$${params.length} OR EXISTS(SELECT 1 FROM task_collaborators tc_mine WHERE tc_mine.task_id=t.id AND tc_mine.employee_id=$${params.length}))`;}
   if (searchParams.get('to')) { params.push(searchParams.get('to')); sql += ` AND t.due_date <= $${params.length}`; }
+  const search = searchParams.get('search')?.trim();
+  if (search) {
+    params.push(`%${search.slice(0, 500)}%`);
+    sql += ` AND (t.title ILIKE $${params.length} OR e.full_name ILIKE $${params.length} OR c.name ILIKE $${params.length})`;
+  }
+  const includeTotal = pagination && searchParams.get('include_total') === '1';
+  const countSql = includeTotal ? `SELECT COUNT(*)::int AS total FROM (${sql}) filtered_tasks` : null;
+  const countParams = includeTotal ? [...params] : null;
+  if (includeTotal) sql = sql.replace('SELECT t.*', 'SELECT COUNT(*) OVER() AS filtered_total, t.*');
   sql = appendPagination(sql + ' ORDER BY t.due_date ASC NULLS LAST, t.id DESC', params, pagination);
   const { rows } = await query(sql, params);
-  return NextResponse.json(pagedResult(rows.map(({ source_import_row, ...task }) => ({ ...task, alert: deadlineAlert(task) })), pagination));
+  let total;
+  if (includeTotal) total = rows.length ? Number(rows[0].filtered_total) : (await query(countSql, countParams)).rows[0].total;
+  const result = pagedResult(rows.map(({ source_import_row, filtered_total, ...task }) => ({ ...task, alert: deadlineAlert(task) })), pagination);
+  return NextResponse.json(total === undefined ? result : { ...result, total });
 });
 
 export const POST = withAuth(async (req, ctx, user) => {

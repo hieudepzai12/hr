@@ -132,7 +132,79 @@ hr-nextjs/
 
 Vercel Blob hiện chỉ hỗ trợ chế độ `public` (không có "private" thực sự ở tầng lưu trữ). Ứng dụng xử lý bằng cách: đường dẫn file được đặt tên ngẫu nhiên khó đoán (UUID), và **server không bao giờ trả URL Blob trực tiếp cho trình duyệt** — mọi yêu cầu tải file đều qua API route riêng, API sẽ tự tải nội dung từ Blob về rồi mới trả cho người dùng sau khi kiểm tra quyền. Cách này đủ an toàn cho hầu hết công cụ nội bộ, nhưng không phải bảo mật tuyệt đối như URL ký (signed URL) có hạn dùng ngắn của S3 — nếu công ty bạn cần mức bảo mật cao hơn cho tài liệu nhạy cảm, nên cân nhắc chuyển sang AWS S3 + signed URL.
 
+## Dự án có nhiều phòng ban — migration 011
+
+Đã áp dụng migration 011 trên Neon ngày 26/10/2026 theo xác nhận của chủ
+hệ thống, không tạo bản sao lưu theo yêu cầu. Kiểm tra trong transaction xác
+nhận dữ liệu dự án, công việc, thành viên, nhân viên và phòng ban không đổi.
+
+Dự án chỉ chọn **các phòng ban tham gia**, không yêu cầu phòng chủ trì.
+Dự án chỉ hoàn thành khi mỗi phòng có công việc thực tế và toàn bộ
+công việc chưa xóa/hủy đã được nghiệm thu; 100% chờ duyệt vẫn chưa hoàn thành.
+Cột `projects.department_id` cũ chỉ giữ để tương thích schema và phạm vi quyền
+cũ, không hiển thị hoặc dùng để quyết định hoàn thành dự án.
+
+Migration 011 tạo `project_departments` với khóa ngoại, giữ nguyên dự án,
+công việc và nhân viên. Dữ liệu ban đầu lấy từ phòng chủ trì, phòng của công
+việc đã liên kết và phòng của nhân viên đang tham gia dự án. Không lấy từ
+tài liệu mẫu hoặc tự suy đoán phòng ban.
+
+Sau khi sao lưu và xác nhận đúng database:
+
+```powershell
+npm run migrate
+```
+
+Lệnh trên chỉ cho chạy local. Với Neon, cần được phê duyệt riêng trước khi chạy
+`npm run migrate -- --allow-remote`. Không deploy code yêu cầu schema 11 trước
+khi migration thành công. Kiểm tra `SELECT MAX(version) FROM schema_migrations;`
+phải trả về 11. Không tự chạy lệnh này vào production chỉ để thử.
+
+Rollback: quay về bản code trước migration; có thể giữ bảng liên kết mới vì
+code cũ không sử dụng nó. Không xóa bảng khi vẫn đang dùng code mới. Giữ bản
+sao lưu trước migration để khôi phục đầy đủ nếu cần.
+
+## Ngân sách tiền lương tổng — migration 012
+
+- Bảng theo tháng gồm STT, bộ phận/nhóm phòng, số lượng, quỹ lương và ghi chú.
+- Mỗi dòng cần ít nhất một phòng ban; hỗ trợ gộp nhiều phòng. Không có dòng
+  thuê bằng hoặc khoản chi ngoài phòng ban trong mẫu này.
+- Nhập trực tiếp tổng quỹ lương của dòng, không nhân tiếp với số lượng.
+  Số lượng và ghi chú có thể để trống. Tổng cộng tính trên toàn bộ kết quả
+  theo bộ lọc, không chỉ trang đang mở; dùng số nguyên VND chính xác.
+- Không cho tạo dòng mới trùng phòng trong cùng tháng. Ngân sách đã duyệt
+  vẫn khóa; sửa phải mở lại và duyệt lại. Xóa mềm/khôi phục giữ nguyên luồng cũ.
+- Quyền theo một phòng không được xem tổng tiền của nhóm có phòng khác;
+  quản lý quỹ lương gộp nhiều phòng cần quyền ngân sách toàn bộ.
+
+Migration 012 mở rộng `salary_budgets`, thêm `salary_budget_departments`,
+cho phép bỏ trống chức vụ/số lượng. Dự toán cũ giữ nguyên số tiền và đánh dấu
+`budget_mode='position'`. Không tự chuyển hoặc cộng lại dữ liệu cũ. Khi người
+dùng mở sửa và lưu mẫu mới, phiên bản trước vẫn được giữ trong lịch sử.
+
+Local: `npm run migrate`. Neon chỉ chạy `npm run migrate -- --allow-remote`
+sau khi được xác nhận riêng cho migration 012. Code mới cần schema 12;
+Đã áp dụng migration 012 trên Neon ngày 26/10/2026 theo xác nhận,
+không sao lưu. Database khi áp dụng chưa có dòng ngân sách; không nhập số liệu mẫu.
+Không tự nhập số tiền trong ảnh vào Neon vì chưa có kỳ ngân sách được chọn.
+
+Rollback giữ nguyên bảng/cột mới và dữ liệu; không DROP bảng khi quay code.
+Code cũ không hỗ trợ sửa đầy đủ ngân sách gộp mới, cần trở lại code có hỗ trợ
+schema 12 để thao tác các dòng này.
+
 ## Xử lý sự cố cài đặt trên Windows
 
 - **Lỗi `EPERM: operation not permitted, rmdir ...`** khi `npm install`: đóng editor/terminal đang mở trong thư mục dự án, xoá thủ công bằng `Remove-Item -Recurse -Force node_modules` (PowerShell) rồi cài lại. Nếu dự án nằm trong thư mục OneDrive, cân nhắc chuyển ra ngoài.
 - **Giải nén zip tạo thư mục lồng cấp** (`hr-nextjs\hr-nextjs\...`): dùng đúng thư mục con chứa `package.json`, hoặc copy nội dung ra ngoài rồi xoá thư mục rỗng còn lại.
+
+## Quản lý thưởng
+
+Hai phần chính sách và đề xuất thưởng hiển thị trên cùng một trang, không chia tab.
+
+- Tiền cố định: chọn phòng ban khi lập chính sách; sau khi duyệt, lập tổng thưởng cho phòng trong dự án. Không chia xuống từng người.
+- Phần trăm: chọn nhân sự và giá trị làm căn cứ; tiền thưởng tính theo tỷ lệ chính sách đã duyệt, làm tròn đến VND. Có thể giới hạn chính sách theo phòng hoặc áp dụng mọi phòng.
+- Hai khoản lưu riêng; không cộng tổng thưởng phòng vào từng nhân sự. Dữ liệu cũ giữ nguyên và đánh dấu khoản thưởng cũ.
+
+Cần migration **013** trước khi dùng code này. Migration chỉ bổ sung `bonus_awards.award_scope`, cho phép `employee_id` trống với thưởng phòng, thêm ràng buộc và index; không xóa hay đổi số tiền cũ. Chạy `npm run migrate` với database local đã cấu hình. Với Neon, chỉ sau khi được xác nhận: `npm run migrate -- --allow-remote`. Lưu ý `.env.local` hiện trỏ Neon; không chạy lệnh trên khi chưa chọn đúng database.
+
+Rollback: giữ schema bổ sung và dữ liệu; không gán nhân sự giả cho thưởng phòng. Nếu cần quay về code cũ, tạm dừng phân hệ thưởng vì code cũ chưa hiểu khoản thưởng không có nhân sự. Không đặt lại NOT NULL khi đã có thưởng phòng.

@@ -1,2 +1,2 @@
-import GovernanceWorkspace from '@/components/GovernanceWorkspace';
-export default function Page(){return <GovernanceWorkspace resource="awards"/>;}
+import BonusWorkspace from '@/components/BonusWorkspace';
+export default function Page(){return <BonusWorkspace/>;}

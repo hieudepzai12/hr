@@ -1,60 +1,33 @@
 'use client';
-
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useFeedbackEffect } from './useFeedback';
+import { useCallback, useEffect, useState } from 'react';
 import api from '@/lib/api';
 
-const PAGE_SIZE = 20;
-
 export default function usePagedList(path, params = {}) {
-  const paramsKey = JSON.stringify(params);
-  const generation = useRef(0);
-  const [items, setItems] = useState([]);
-  const [hasMore, setHasMore] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState('');
+  const filterKey = JSON.stringify(params);
+  const [paging, setPaging] = useState({ filterKey, page: 1, pageSize: 20 });
+  const page = paging.filterKey === filterKey ? paging.page : 1;
+  const pageSize = paging.pageSize;
   const [revision, setRevision] = useState(0);
-  const requestKey = `${path}:${paramsKey}:${revision}`;
-  const [loadedKey, setLoadedKey] = useState('');
-
+  const key = JSON.stringify([path, filterKey, page, pageSize, revision]);
+  const [result, setResult] = useState({ key: '', items: [], hasMore: false, error: '' });
   useEffect(() => {
-    const requestGeneration = generation;
-    const current = ++requestGeneration.current;
-    api.get(path, { params: { ...JSON.parse(paramsKey), limit: PAGE_SIZE, offset: 0 } })
+    let active = true;
+    api.get(path, { params: { ...JSON.parse(filterKey), limit: pageSize, offset: (page - 1) * pageSize } })
       .then(({ data }) => {
-        if (requestGeneration.current !== current) return;
-        setItems(data.items);
-        setHasMore(data.hasMore);
-        setLoadedKey(requestKey);
-        setError('');
-      })
-      .catch(() => { if (requestGeneration.current === current) setError('Không thể tải danh sách'); })
-      .finally(() => { if (requestGeneration.current === current) setLoading(false); });
-    return () => { if (requestGeneration.current === current) requestGeneration.current++; };
-  }, [path, paramsKey, revision, requestKey]);
-
-  const refresh = useCallback(() => {
-    setLoading(true);
-    setRevision(value => value + 1);
-  }, []);
-
-  const loadMore = useCallback(async () => {
-    if (loadingMore || loading || loadedKey !== requestKey || !hasMore) return;
-    const current = generation.current;
-    setLoadingMore(true);
-    try {
-      const { data } = await api.get(path, { params: { ...JSON.parse(paramsKey), limit: PAGE_SIZE, offset: items.length } });
-      if (generation.current !== current) return;
-      setItems(previous => [...previous, ...data.items]);
-      setHasMore(data.hasMore);
-      setError('');
-    } catch {
-      if (generation.current === current) setError('Không thể tải thêm dữ liệu');
-    } finally {
-      if (generation.current === current) setLoadingMore(false);
-    }
-  }, [hasMore, items.length, loadedKey, loading, loadingMore, paramsKey, path, requestKey]);
-
-  const ready = loadedKey === requestKey;
-  return { items: ready ? items : [], hasMore: ready && hasMore, loading: !ready || loading, loadingMore, error, refresh, loadMore };
+        if (!active) return;
+        if (!data.items.length && page > 1) { setPaging({ filterKey, page: page - 1, pageSize }); return; }
+        setResult({ key, items: data.items, hasMore: data.hasMore, total: data.total, error: '' });
+      }).catch(() => { if (active) setResult({ key, items: [], hasMore: false, error: 'Không thể tải danh sách' }); });
+    return () => { active = false; };
+  }, [path, filterKey, page, pageSize, key]);
+  const refresh = useCallback(() => setRevision(value => value + 1), [setRevision]);
+  const loading = result.key !== key;
+  const items = loading ? [] : result.items;
+  const error = loading ? '' : result.error;
+  useFeedbackEffect(error);
+  return { items, loading, error, refresh, pagination: { page, pageSize, total: loading ? undefined : result.total,
+    count: items.length, hasMore: !loading && result.hasMore, loading, error,
+    onPageChange: next => setPaging({ filterKey, page: next, pageSize }),
+    onPageSizeChange: next => setPaging({ filterKey, page: 1, pageSize: next }) } };
 }

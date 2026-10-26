@@ -9,7 +9,7 @@ export const GET = withAuth(async (req, ctx, user) => {
   const printScope = scopeFor(user, 'tasks', 'print');
   if (viewScope === 'none' || printScope === 'none') return forbidden();
   const searchParams = new URL(req.url).searchParams;
-  const filters = Object.fromEntries(['assignee_id', 'department_id', 'customer_id', 'project_id', 'status', 'from', 'to', 'mine']
+  const filters = Object.fromEntries(['assignee_id', 'department_id', 'customer_id', 'project_id', 'status', 'from', 'to', 'mine', 'search']
     .filter((key) => searchParams.get(key)).map((key) => [key, searchParams.get(key)]));
   let plan;
   try { plan = buildTaskPlanQuery({ userId: user.id, departmentId: user.department_id, viewScope, printScope, filters }); }

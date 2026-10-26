@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef } from 'react';
 import { X } from 'lucide-react';
+import { isFeedbackOpen } from '@/lib/feedback';
 
 export default function Modal({ title, onClose, children, width = 'max-w-lg' }) {
   const titleId = useId();
@@ -14,6 +15,7 @@ export default function Modal({ title, onClose, children, width = 'max-w-lg' }) 
     document.body.style.overflow = 'hidden';
     panel.current?.querySelector('input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button')?.focus();
     const onKeyDown = (event) => {
+      if (isFeedbackOpen()) return;
       if (event.key === 'Escape') closeRef.current();
       if (event.key !== 'Tab' || !panel.current) return;
       const focusable = [...panel.current.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])')]

@@ -1,4 +1,5 @@
 'use client';
+import useFeedback from '@/lib/useFeedback';
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
 import Layout from '@/components/Layout';
@@ -14,16 +15,16 @@ function Content() {
   const [roles, setRoles] = useState([]);
   const [role, setRole] = useState('manager');
   const [draft, setDraft] = useState({});
-  const [message, setMessage] = useState('');
+  const [,setMessage]=useFeedback('auto');
   const [saving, setSaving] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState('');
-  const [createError, setCreateError] = useState('');
+  const [createError,setCreateError]=useFeedback('error');
   const [editOpen, setEditOpen] = useState(false);
   const [editName, setEditName] = useState('');
-  const [editError, setEditError] = useState('');
+  const [editError,setEditError]=useFeedback('error');
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleteError, setDeleteError] = useState('');
+  const [deleteError,setDeleteError]=useFeedback('error');
   useEffect(() => {
     if (user?.role !== 'admin') return;
     api.get('/permissions').then(({ data }) => {
@@ -34,7 +35,7 @@ function Content() {
         setDraft(structuredClone(initial.permissions));
       }
     }).catch(() => setMessage('Không tải được bộ quyền.'));
-  }, [user?.role]);
+  }, [user?.role, setMessage]);
   const selected = roles.find((item) => item.role === role);
   const toggle = (key, action) => setDraft((current) => {
     const next = { ...current, [key]: { ...current[key], [action]: !current[key][action] } };
@@ -115,7 +116,7 @@ function Content() {
           <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b border-line text-left"><th className="py-3">Mục</th><th className="py-3 text-center">Được xem</th><th className="py-3 text-center">Được quản lý</th></tr></thead><tbody>{MODULES.filter(([key]) => !SCOPED_MODULES.includes(key)).map(([key, label]) => <tr key={key} className="border-b border-line last:border-0"><td className="py-3">{label}</td>{key === 'organization' ? <td colSpan={2} className="py-3 text-center"><select aria-label="Phạm vi xem sơ đồ tổ chức" value={draft.organization?.scope || 'none'} disabled={role === 'admin'} onChange={(event) => setDraft((current) => ({ ...current, organization: { ...current.organization, scope: event.target.value, view: event.target.value !== 'none', manage: false } }))} className="w-full max-w-xs rounded-md border border-line bg-white px-3 py-2 text-sm disabled:bg-paper"><option value="none">Không được xem</option><option value="department">Chỉ phòng ban của mình</option><option value="full">Toàn công ty</option></select></td> : ['view', 'manage'].map((action) => <td key={action} className="py-3 text-center">{key === 'dashboard' && action === 'manage' ? <span className="text-slate" title="Tổng quan chỉ có quyền xem">—</span> : <input type="checkbox" checked={Boolean(draft[key]?.[action])} onChange={() => toggle(key, action)} disabled={role === 'admin'} aria-label={`${action === 'view' ? 'Xem' : 'Quản lý'} ${label}`} className="accent-teal h-4 w-4" />}</td>)}</tr>)}</tbody></table></div>
           <div className="mt-6 space-y-4"><h3 className="font-semibold">Phạm vi quyền dữ liệu</h3>{SCOPED_MODULES.map((module) => <div key={module} className="rounded-md border border-line p-3"><div className="mb-3 text-sm font-medium">{MODULES.find(([key]) => key === module)?.[1]}</div><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{moduleActions(module).map((action) => <label key={action} className="text-xs">{{ view: 'Xem', create: 'Tạo', edit: 'Sửa', approve: 'Duyệt', delete: 'Xóa', restore: 'Khôi phục', print: 'In' }[action]}<select aria-label={`${action} ${module}`} value={draft[module]?.scopes?.[action] || 'none'} disabled={role === 'admin'} onChange={(event) => setScope(module, action, event.target.value)} className="mt-1 w-full rounded-md border border-line bg-white px-2 py-2"><option value="none">Không có</option><option value="self">Bản thân</option><option value="department">Phòng ban</option><option value="all">Toàn bộ</option></select></label>)}</div></div>)}</div>
         </> : <p className="text-sm text-slate">Đang tải bộ quyền...</p>}
-        {message && <p role="status" className="text-sm mt-4 text-teal">{message}</p>}
+
       </div>
     </div>
     {createOpen && <Modal title="Thêm bộ phân quyền" onClose={() => setCreateOpen(false)}>

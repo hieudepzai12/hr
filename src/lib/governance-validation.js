@@ -14,14 +14,28 @@ export function validateGovernanceInput(resource, body) {
   const config = GOVERNANCE[resource];
   if (!config || !body || typeof body !== 'object' || Array.isArray(body)) throw new GovernanceError('Dữ liệu không hợp lệ');
   const fields = {};
+  const budgetMode=resource==='budgets'?(body.budget_mode||(body.position_id?'position':'aggregate')):null;
   for (const field of config.fields) {
+    if(resource==='budgets'){
+      if(budgetMode==='aggregate'&&['position_id','base_salary','allowance','employer_cost'].includes(field.key)){
+        fields[field.key]=field.key==='position_id'?null:0;continue;
+      }
+      if(budgetMode==='position'&&['department_ids','total_amount'].includes(field.key))continue;
+    }
     let value = body[field.key];
+    if(resource==='budgets'&&field.key==='budget_mode')value=budgetMode;
     if (value === undefined || value === null || value === '') {
-      if (field.required || resource === 'assignments' && field.key === 'start_date') throw new GovernanceError(`Cần nhập ${field.label}`);
-      fields[field.key] = field.type === 'number' ? 0 : field.type === 'select' ? Object.keys(field.options)[0] : null;
+      if (field.required && field.type !== 'references' || resource === 'assignments' && field.key === 'start_date') throw new GovernanceError(`Cần nhập ${field.label}`);
+      fields[field.key] = resource==='budgets'&&field.key==='headcount'&&budgetMode==='aggregate'?null:field.type === 'references' ? [] : field.type === 'number' ? 0 : field.type === 'select' ? Object.keys(field.options)[0] : null;
       continue;
     }
-    if (field.type === 'reference') {
+    if(field.type==='money'){
+      if(typeof value==='number'&&!Number.isSafeInteger(value)||!/^\d{1,18}$/.test(String(value)))throw new GovernanceError(`${field.label} phải là số nguyên VND không âm, tối đa 18 chữ số`);
+      value=BigInt(String(value)).toString();
+    } else if (field.type === 'references') {
+      if (!Array.isArray(value) || value.length > 100 || value.some(id => !validId(id))) throw new GovernanceError(`${field.label} không hợp lệ`);
+      value = [...new Set(value.map(Number))];
+    } else if (field.type === 'reference') {
       if (!validId(value)) throw new GovernanceError(`${field.label} không hợp lệ`);
       value = Number(value);
     } else if (field.type === 'number') {
@@ -41,10 +55,11 @@ export function validateGovernanceInput(resource, body) {
   }
   if (fields.end_date && fields.start_date && fields.end_date < fields.start_date) throw new GovernanceError('Ngày kết thúc phải từ ngày bắt đầu trở đi');
   if (fields.allocation > 100 || fields.rate > 100) throw new GovernanceError('Tỷ lệ phải từ 0 đến 100');
+  if(resource==='budgets'&&fields.headcount!==null&&fields.headcount>2147483647)throw new GovernanceError('Số lượng nhân sự vượt giới hạn');
   if (resource === 'recruitment' && (!fields.quantity || fields.hired_count > fields.quantity)) throw new GovernanceError('Số đã tuyển không được vượt số cần tuyển');
   if (resource === 'documents' && !safeDocumentUrl(fields.url)) throw new GovernanceError('Chỉ chấp nhận đường dẫn HTTPS không chứa tài khoản/mật khẩu');
   if (fields.code) fields.code = fields.code.toLocaleUpperCase('vi');
-  if(fields.verification_status==='verified'&&!fields.source_reference)throw new GovernanceError('Cần nguồn tài liệu/căn cứ trước khi đánh dấu đã xác minh');
+  if(resource!=='positions'&&fields.verification_status==='verified'&&!fields.source_reference)throw new GovernanceError('Cần nguồn tài liệu/căn cứ trước khi đánh dấu đã xác minh');
   return fields;
 }
 export function budgetTotal(fields) {
@@ -52,10 +67,25 @@ export function budgetTotal(fields) {
   if (total > 999999999999999999n) throw new GovernanceError('Tổng dự toán vượt giới hạn');
   return total.toString();
 }
+export function awardBreakdown(policy, fields) {
+  if(!['manual','percentage','combined'].includes(policy.calculation))throw new GovernanceError('Cách tính thưởng không hợp lệ');
+  const money=(value)=>{
+    if(typeof value==='number'&&!Number.isSafeInteger(value)||!/^\d{1,18}$/.test(String(value??0)))throw new GovernanceError('Tiền thưởng và căn cứ phải là số nguyên VND không âm, tối đa 18 chữ số');
+    return BigInt(String(value??0));
+  };
+  const fixed=money(fields.fixed_amount??fields.amount??0);
+  if(policy.calculation==='percentage'&&fields.fixed_amount!=null&&money(fields.fixed_amount)>0n)throw new GovernanceError('Chính sách chỉ thưởng theo phần trăm; chọn chính sách kết hợp để thêm tiền cố định');
+  const rate=Number(policy.rate||0);
+  if(!Number.isFinite(rate)||rate<0||rate>100)throw new GovernanceError('Tỷ lệ thưởng phải từ 0 đến 100');
+  const rateUnits = BigInt(Math.round(rate * 10000));
+  const percentage=policy.calculation==='manual'?0n:(money(fields.basis_amount)*rateUnits+500000n)/1000000n;
+  const fixedAmount=policy.calculation==='percentage'?0n:fixed;
+  const amount=fixedAmount+percentage;
+  if(amount>999999999999999999n)throw new GovernanceError('Tổng thưởng vượt giới hạn 18 chữ số VND');
+  return {fixed_amount:fixedAmount.toString(),percentage_amount:percentage.toString(),amount:amount.toString()};
+}
 export function awardTotal(policy, fields) {
-  if (policy.calculation !== 'percentage') return String(fields.amount);
-  const rateUnits = BigInt(Math.round(Number(policy.rate) * 10000));
-  return ((BigInt(fields.basis_amount) * rateUnits + 500000n) / 1000000n).toString();
+  return awardBreakdown(policy,fields).amount;
 }
 export function assertTransition(before, action, actorId, context = {}) {
   if (action === 'submit' && ['draft', 'rejected'].includes(before.status)) return 'submitted';

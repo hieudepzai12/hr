@@ -1,4 +1,6 @@
 'use client';
+import { confirmAction, notify } from '@/lib/feedback';
+import useFeedback from '@/lib/useFeedback';
 
 import { useEffect, useRef, useState } from 'react';
 import { Camera, Trash2, Loader2 } from 'lucide-react';
@@ -17,7 +19,7 @@ function ProfileContent() {
   const showProfiles=tab==='profiles'&&can('profiles');
   const fileRef = useRef(null);
   const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState('');
+  const [error,setError]=useFeedback('error');
   const [refreshing, setRefreshing] = useState(true);
 
   useEffect(() => {
@@ -25,7 +27,7 @@ function ProfileContent() {
       .then(({ data }) => updateUser(data))
       .catch(() => setError('Không tải được thông tin mới nhất.'))
       .finally(() => setRefreshing(false));
-  }, [updateUser]);
+  }, [updateUser, setError]);
 
   const displayDate = (value) => value ? value.slice(0, 10).split('-').reverse().join('/') : 'Chưa cập nhật';
 
@@ -39,6 +41,7 @@ function ProfileContent() {
       formData.append('avatar', file);
       const { data } = await api.post(`/employees/${user.id}/avatar`, formData);
       updateUser({ avatar_path: data.avatar_path });
+      void notify('Đã cập nhật ảnh đại diện.');
     } catch (err) {
       setError(err.response?.data?.error || 'Tải ảnh thất bại');
     } finally {
@@ -48,11 +51,12 @@ function ProfileContent() {
   };
 
   const removeAvatar = async () => {
-    if (!confirm('Xoá ảnh đại diện hiện tại?')) return;
+    if (!await confirmAction('Xoá ảnh đại diện hiện tại?')) return;
     setError('');
     try {
       await api.delete(`/employees/${user.id}/avatar`);
       updateUser({ avatar_path: null });
+      void notify('Đã xóa ảnh đại diện.');
     } catch (err) {
       setError(err.response?.data?.error || 'Không thể xoá ảnh');
     }

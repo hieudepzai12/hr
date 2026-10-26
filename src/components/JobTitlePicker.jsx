@@ -1,8 +1,9 @@
 'use client';
+import useFeedback from '@/lib/useFeedback';
 import {useId,useRef,useState} from 'react';
 import {Plus,X} from 'lucide-react';
 export default function JobTitlePicker({value,onChange,options,departments=[]}){
- const [custom,setCustom]=useState(''),[error,setError]=useState('');
+ const [custom,setCustom]=useState(''),[error,setError]=useFeedback('error');
  const input=useRef(null);
  const prefix=useId();
  const [department,setDepartment]=useState('');

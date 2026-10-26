@@ -1,4 +1,5 @@
 'use client';
+import useFeedback from '@/lib/useFeedback';
 
 import { useState } from 'react';
 import api from '@/lib/api';
@@ -12,7 +13,7 @@ export default function ExcelImport({ onClose, onImported }) {
   const [overrides, setOverrides] = useState({});
   const [allowMissingDue, setAllowMissingDue] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error,setError]=useFeedback('error');
   const setRow = (key, patch) => setOverrides((current) => ({ ...current,
     [key]: { ...current[key], ...patch },
   }));

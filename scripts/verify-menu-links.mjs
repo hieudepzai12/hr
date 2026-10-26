@@ -6,7 +6,8 @@ import {GOVERNANCE} from '../src/lib/governance-config.js';
 
 process.loadEnvFile('.env.local');
 assert.ok(['localhost','127.0.0.1','[::1]'].includes(new URL(process.env.DATABASE_URL).hostname),'Local database only');
-const base='http://localhost:3000';
+const base=process.env.VERIFY_BASE_URL || 'http://localhost:3000';
+assert.ok(['localhost','127.0.0.1'].includes(new URL(base).hostname),'Local API only');
 const client=new pg.Client({connectionString:process.env.DATABASE_URL});
 await client.connect();
 const failures=[];let checked=0;
@@ -19,7 +20,9 @@ try{
   if(path.startsWith('/api/')&&response.ok){try{return await response.json();}catch{failures.push({path,error:'Invalid JSON'});}}
  };
  const nav=await readFile('src/lib/navigation.js','utf8');
- const routes=[...new Set([...nav.matchAll(/to:'([^']+)'/g)].map(match=>match[1]))];
+ const declared=[...nav.matchAll(/to:'([^']+)'/g)].map(match=>match[1]);
+ assert.equal(new Set(declared).size,declared.length,'Duplicate menu routes');
+ const routes=[...new Set(declared)];
  for(const path of routes){
   try{await access('src/app'+(path==='/'?'':path)+'/page.js');}catch{failures.push({path,error:'Missing page file'});}
   await check(path);

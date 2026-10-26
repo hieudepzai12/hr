@@ -13,10 +13,10 @@ function SidebarItem({ item, pathname, compact, onClose, onToggle }) {
   const submenuId = useId();
   const Icon = item.icon;
   const active = navigationActive(item, pathname);
-  const className = `relative flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-[13px] font-medium transition-colors focus-ring ${compact ? 'justify-center' : ''} ${active ? 'bg-[#294368] text-white' : 'text-[#d4dfed] hover:bg-white/10 hover:text-white'}`;
+  const className = `sidebar-menu-item relative flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors focus-ring ${compact ? 'justify-center' : ''} ${active ? 'bg-[#294368] text-white' : 'text-[#d4dfed] hover:bg-white/10 hover:text-white'}`;
   if (item.children) return <div>
     <button type="button" className={className} title={compact ? item.label : undefined} aria-label={compact ? item.label : undefined} aria-expanded={!compact && expanded} aria-controls={submenuId} onClick={() => { if (compact) { onToggle(); setExpanded(true); } else setExpanded(!expanded); }}>
-      <Icon size={18} className="shrink-0" />
+      <Icon size={18} className="shrink-0" strokeWidth={1.9} />
       {!compact && <><span className="min-w-0 flex-1">{item.label}</span>{expanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</>}
     </button>
     {!compact && expanded && <div id={submenuId} className="ml-5 mt-1 space-y-1 border-l border-white/15 pl-2">
@@ -49,14 +49,14 @@ export default function Sidebar({ collapsed = false, mobileOpen = false, onClose
         const items = group.items;
         if (!items.length) return null;
         return <div key={group.label}>
-          {!compact && <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#a7b8d0]">{group.label}</div>}
+          {!compact && <div className="px-3 pb-2 text-[13px] font-semibold leading-5 text-[#b8c8dc]">{group.label}</div>}
           {compact && <div className="mx-3 mb-2 border-t border-white/10" />}
           <div className="space-y-1">{items.map(item => <SidebarItem key={item.to || item.label} item={item} pathname={pathname} compact={compact} onClose={onClose} onToggle={onToggle} />)}</div>
         </div>;
       })}
     </nav>
     <div className={`border-t border-white/10 p-3 ${mobileOpen ? '' : 'max-lg:hidden'}`}>
-      <button type="button" onClick={logout} title={compact ? 'Đăng xuất' : undefined} aria-label={compact ? 'Đăng xuất' : undefined} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[#d4dfed] hover:bg-white/10 hover:text-white focus-ring ${compact ? 'justify-center' : ''}`}>
+      <button type="button" onClick={logout} title={compact ? 'Đăng xuất' : undefined} aria-label={compact ? 'Đăng xuất' : undefined} className={`sidebar-menu-item flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[#d4dfed] hover:bg-white/10 hover:text-white focus-ring ${compact ? 'justify-center' : ''}`}>
         <LogOut size={18} />{!compact && 'Đăng xuất'}
       </button>
     </div>

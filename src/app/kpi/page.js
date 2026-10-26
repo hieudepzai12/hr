@@ -1,4 +1,6 @@
 'use client';
+import { confirmAction } from '@/lib/feedback';
+import useFeedback from '@/lib/useFeedback';
 
 import { useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
@@ -9,7 +11,7 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import Avatar from '@/components/Avatar';
 import { useAuth } from '@/context/AuthContext';
 import usePagedList from '@/lib/usePagedList';
-import LoadMore from '@/components/LoadMore';
+import Pagination from '@/components/Pagination';
 
 const RATING_COLOR = {
   'Xuất sắc': { bg: '#DEE8D5', fg: '#5C7A4F' },
@@ -27,14 +29,14 @@ const DEFAULT_CRITERIA = [
 function KpiContent() {
   const { can } = useAuth();
   const isManager = can('kpi', 'manage');
-  const { items: evaluations, hasMore, loading, loadingMore, error: listError, refresh: load, loadMore } = usePagedList('/kpi');
+  const { items: evaluations, pagination, loading, error: listError, refresh: load } = usePagedList('/kpi');
   const [employees, setEmployees] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState({ employee_id: '', period: '', criteria: DEFAULT_CRITERIA, comments: '' });
   const [evidenceOptions, setEvidenceOptions] = useState({ tasks: [], reports: [] });
-  const [error, setError] = useState('');
+  const [error,setError]=useFeedback('error');
   const [saving, setSaving] = useState(false);
-  const [notice, setNotice] = useState('');
+  const [notice,setNotice]=useFeedback('success');
 
   useEffect(() => { if (isManager) api.get('/employees', { params: { fields: 'options', status: 'active' } }).then(({ data }) => setEmployees(data)); }, [isManager]);
 
@@ -83,7 +85,7 @@ function KpiContent() {
   };
 
   const remove = async (id) => {
-    if (!confirm('Xoá đánh giá này?')) return;
+    if (!await confirmAction('Xoá đánh giá này?')) return;
     try { await api.delete(`/kpi/${id}`); load(); setNotice('Đã xóa đánh giá KPI.'); }
     catch (err) { setError(err.response?.data?.error || 'Không xóa được đánh giá KPI'); }
   };
@@ -99,7 +101,7 @@ function KpiContent() {
       )}
     >
       {(listError || error && !modalOpen) && <p role="alert" className="ui-notice mb-4">{listError || error}</p>}
-      {notice && <p role="status" className="mb-4 rounded-lg border border-[#b9dfc9] bg-[#edfbf3] px-3 py-2 text-sm text-[#17623a]">{notice}</p>}
+
       <div className="grid gap-3">
         {loading ? <p role="status" className="ui-card p-8 text-center text-sm text-slate">Đang tải đánh giá KPI...</p> : evaluations.length === 0 && <p className="ui-card ui-empty">Chưa có đánh giá KPI nào.</p>}
         {evaluations.map((ev) => {
@@ -145,7 +147,7 @@ function KpiContent() {
         })}
       </div>
 
-      <LoadMore hasMore={hasMore} loading={loadingMore} onClick={loadMore} />
+      <Pagination {...pagination} />
 
       {modalOpen && (
         <Modal title="Tạo đánh giá KPI" onClose={() => setModalOpen(false)} width="max-w-xl">
