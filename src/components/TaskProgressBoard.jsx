@@ -1,7 +1,7 @@
 'use client';
+import { progressText } from '@/lib/task-progress';
 
 import { CalendarDays, CheckCheck, Circle, Clock3, LoaderCircle, UserRound } from 'lucide-react';
-import { PriorityBadge } from './Badges';
 
 const stages = [
   { key: 'todo', label: 'Chưa bắt đầu', icon: Circle, color: '#64748b', tint: '#f1f5f9' },
@@ -30,12 +30,12 @@ export default function TaskProgressBoard({ tasks, onOpen }) {
               const overdue = task.alert?.kind === 'overdue';
               const hasAlert = task.alert && task.alert.kind !== 'missing';
               return <button key={task.id} type="button" onClick={() => onOpen(task)} className="group block w-full min-w-0 rounded-xl border border-line bg-white p-3.5 text-left shadow-sm transition hover:border-[#93b4df] hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]">
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><span className="text-xs font-medium text-slate">CV-{task.id}</span><PriorityBadge priority={task.priority} /></div>
-                <h3 className="break-words text-sm font-semibold leading-6 text-ink group-hover:text-[#1d4f95]">{task.title}</h3>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><span className="text-xs font-medium text-slate">CV-{task.id}</span></div>
+                <h3 className="whitespace-pre-wrap break-words text-sm font-semibold leading-6 text-ink group-hover:text-[#1d4f95]">{task.title}</h3>
                 {task.customer_name && <p className="mt-1 break-words text-xs leading-5 text-slate">{task.customer_name}</p>}
                 <div className="my-3">
-                  <div className="mb-1.5 flex items-center justify-between gap-2 text-xs"><span className="text-slate">Tiến độ</span><strong style={{ color: stage.color }}>{task.progress || 0}%</strong></div>
-                  <div role="progressbar" aria-label={`Tiến độ ${task.title}`} aria-valuenow={task.progress || 0} aria-valuemin={0} aria-valuemax={100} className="h-1.5 overflow-hidden rounded-full bg-[#e8edf4]"><div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.max(0, Number(task.progress) || 0))}%`, backgroundColor: stage.color }} /></div>
+                  <p className="text-xs text-slate">Tiến độ</p>
+                  <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6">{progressText(task)}</p>
                 </div>
                 <div className="space-y-2 border-t border-[#eef2f6] pt-3 text-xs text-slate">
                   <div className="flex items-start gap-2"><UserRound size={14} className="mt-0.5 shrink-0" aria-hidden="true" /><span className="min-w-0 break-words">{task.assignee_name || 'Chưa có người thực hiện'}{task.collaborator_ids?.length > 0 && <span className="block pt-0.5">+{task.collaborator_ids.length} người phối hợp</span>}</span></div>

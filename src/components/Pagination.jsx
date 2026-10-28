@@ -13,7 +13,7 @@ export default function Pagination({ page, pageSize = 20, total, count = 0, hasM
       {loading && <span role="status" className="text-slate">Đang tải…</span>}
     </div>
     <nav aria-label="Phân trang" className="flex flex-wrap items-center gap-1">
-      <button type="button" disabled={loading || page <= 1} onClick={() => onPageChange(page - 1)} className="ui-button ui-button-secondary disabled:opacity-50">Trước</button>
+      <button type="button" disabled={loading || Boolean(error) || page <= 1} onClick={() => onPageChange(page - 1)} className="ui-button ui-button-secondary disabled:opacity-50">Trước</button>
       {pages.map(number => <button type="button" key={number} aria-label={`Trang ${number}`} aria-current={number === page ? 'page' : undefined} disabled={loading || Boolean(error)} onClick={() => onPageChange(number)} className={`ui-button ${number === page ? 'ui-button-primary' : 'ui-button-secondary'} disabled:opacity-50`}>{number}</button>)}
       <button type="button" disabled={loading || Boolean(error) || page >= last} onClick={() => onPageChange(page + 1)} className="ui-button ui-button-secondary disabled:opacity-50">Sau</button>
     </nav>

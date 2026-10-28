@@ -9,14 +9,12 @@ import Layout from '@/components/Layout';
 import Avatar from '@/components/Avatar';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { useAuth } from '@/context/AuthContext';
-import ProfilesPanel from '@/components/ProfilesPanel';
+import EmployeeProfile from '@/components/EmployeeProfile';
 
 const ROLE_LABEL = { admin: 'Quản trị viên', director: 'Giám đốc', manager: 'Quản lý', employee: 'Nhân viên' };
 
 function ProfileContent() {
   const { user, updateUser, can } = useAuth();
-  const [tab,setTab]=useState('personal');
-  const showProfiles=tab==='profiles'&&can('profiles');
   const fileRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [error,setError]=useFeedback('error');
@@ -63,10 +61,9 @@ function ProfileContent() {
   };
 
   return (
-    <Layout title="Thông tin cá nhân" subtitle="Thông tin tài khoản và hồ sơ nhân sự theo quyền được cấp">
-      <div className="mb-4 flex flex-wrap gap-2" aria-label="Chọn thông tin cá nhân"><button type="button" className={!showProfiles?'ui-button ui-button-primary':'ui-button'} aria-pressed={!showProfiles} onClick={()=>setTab('personal')}>Thông tin cá nhân</button>{can('profiles')&&<button type="button" className={showProfiles?'ui-button ui-button-primary':'ui-button'} aria-pressed={showProfiles} onClick={()=>setTab('profiles')}>Hồ sơ nhân sự</button>}</div>
-      {showProfiles?<ProfilesPanel/>:<div className="w-full min-h-[calc(100vh-160px)] bg-paper-raised rounded-lg border border-line p-6">
-        <div className="flex items-center gap-5">
+    <Layout title="Thông tin cá nhân">
+      <div className="w-full min-h-[calc(100vh-160px)] bg-paper-raised rounded-lg border border-line p-6">
+        <div className="flex min-w-0 items-center gap-5">
           <div className="relative">
             <Avatar name={user.full_name} color={user.avatar_color} avatarPath={user.avatar_path} size={72} />
             <button
@@ -79,9 +76,9 @@ function ProfileContent() {
             </button>
             <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={handleFile} />
           </div>
-          <div>
-            <div className="font-display text-lg font-semibold text-ink">{user.full_name}</div>
-            <div className="text-sm text-slate">{user.email}</div>
+          <div className="min-w-0">
+            <div className="font-display break-words text-lg font-semibold text-ink">{user.full_name}</div>
+            <div className="break-all text-sm text-slate">{user.email}</div>
             <div className="text-xs text-slate mt-1">{user.role_label || ROLE_LABEL[user.role] || user.role}</div>
           </div>
         </div>
@@ -89,7 +86,7 @@ function ProfileContent() {
         {error && <div className="mt-4 text-sm text-clay bg-[#F1DAD5] px-3 py-2 rounded-md">{error}</div>}
         {refreshing && <p className="mt-4 text-xs text-slate">Đang cập nhật thông tin...</p>}
 
-        <div className="mt-6 pt-5 border-t border-line">
+        {can('profiles') ? <div className="mt-6 border-t border-line pt-5"><EmployeeProfile id={user.id} inline /><p className="mt-4 text-sm text-slate">Ngày tạo tài khoản: {displayDate(user.created_at)}</p></div> : <div className="mt-6 pt-5 border-t border-line">
           <h2 className="font-semibold text-ink mb-4">Thông tin nhân viên</h2>
           <dl className="grid gap-x-8 gap-y-4 sm:grid-cols-2 text-sm">
             {[
@@ -105,7 +102,7 @@ function ProfileContent() {
               ['Ngày tạo tài khoản', displayDate(user.created_at)],
             ].map(([label, value]) => <div key={label}><dt className="text-slate">{label}</dt><dd className="mt-1 font-medium text-ink break-words">{value}</dd></div>)}
           </dl>
-        </div>
+        </div>}
 
         <div className="mt-5 flex items-center gap-3">
           <button
@@ -122,7 +119,7 @@ function ProfileContent() {
           )}
         </div>
         <p className="text-xs text-slate mt-3">Định dạng PNG, JPG, WEBP hoặc GIF — tối đa 3MB.</p>
-      </div>}
+      </div>
     </Layout>
   );
 }

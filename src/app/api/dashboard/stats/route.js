@@ -20,7 +20,7 @@ export const GET = withAuth(async (req, ctx, user) => {
   // One round trip, with the same permission predicates as the list endpoints.
   const counts = await queryOne(`WITH input AS (SELECT $1::int AS employee_id, $2::int AS department_id, $3::text AS today),
       visible_tasks AS MATERIALIZED (SELECT t.id, t.title, t.due_date, t.status, t.assignee_id,
-        t.progress, t.planned_progress_date, t.planned_progress FROM tasks t WHERE t.deleted_at IS NULL AND ${taskWhere}),
+        t.progress, t.progress_text, t.planned_progress_date, t.planned_progress FROM tasks t WHERE t.deleted_at IS NULL AND ${taskWhere}),
       visible_reports AS MATERIALIZED (SELECT r.id, r.title, r.type, r.employee_id, r.status, r.created_at
         FROM reports r WHERE r.deleted_at IS NULL AND ${reportWhere})
       SELECT
@@ -32,7 +32,7 @@ export const GET = withAuth(async (req, ctx, user) => {
       COALESCE((SELECT jsonb_agg(s) FROM (SELECT t.status, COUNT(*)::int AS c
         FROM visible_tasks t GROUP BY t.status) s), '[]'::jsonb) AS task_statuses,
       COALESCE((SELECT jsonb_agg(d) FROM (SELECT t.id, t.title, t.due_date, t.status,
-        t.progress, t.planned_progress_date, t.planned_progress, e.full_name AS assignee_name FROM visible_tasks t
+        t.progress, t.progress_text, t.planned_progress_date, t.planned_progress, e.full_name AS assignee_name FROM visible_tasks t
       LEFT JOIN employees e ON e.id=t.assignee_id
       WHERE t.due_date >= $3 AND t.status NOT IN ('done','review')
       ORDER BY t.due_date ASC, t.id ASC LIMIT 5) d), '[]'::jsonb) AS deadlines,

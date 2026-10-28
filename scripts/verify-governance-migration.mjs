@@ -31,7 +31,7 @@ try{
   for(const table of ['employees','departments','tasks','reports'])originals[table]=(await legacy.query(`SELECT row_to_json(r) AS data FROM ${table} r ORDER BY id`)).rows;
   await legacy.closeDb();legacy=null;
   current=await import('../src/lib/db.js');await current.migrateSchema();
-  assert.equal((await current.query('SELECT MAX(version)::int AS version FROM schema_migrations')).rows[0].version,13);
+  assert.equal((await current.query('SELECT MAX(version)::int AS version FROM schema_migrations')).rows[0].version,14);
   for(const table of ['employees','departments','tasks','reports']){
     const rows=(await current.query(`SELECT row_to_json(r) AS data FROM ${table} r ORDER BY id`)).rows;
     if(table==='tasks')for(const row of rows)delete row.data.project_id;

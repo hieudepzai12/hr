@@ -18,7 +18,7 @@ const columns = [
   ['Phòng ban', 24, 'Ghi đúng tên phòng ban. Nếu để trống, hệ thống lấy phòng của người thực hiện.'],
   ['Khách hàng', 29, 'Tên hoặc mã khách hàng đang hoạt động. Có thể để trống.'],
   ['Hạn chót', 18, 'Nhập ngày dưới dạng dd/mm/yyyy, ví dụ 15/10/2026.'],
-  ['Tiến độ', 16, 'Số nguyên từ 0 đến 100. Không nhập 0,5 để biểu thị 50%.'],
+  ['Tiến độ', 40, 'Nhập nội dung tiến độ thực hiện. Có thể để trống.'],
   ['Kết quả đã làm', 34, 'Nội dung đã hoàn thành đến thời điểm nhập. Có thể để trống.'],
   ['Vướng mắc', 30, 'Có thể để trống.'],
   ['Giải pháp', 30, 'Đề xuất giải pháp. Có thể để trống.'],
@@ -36,11 +36,8 @@ sheet.getRow(1).eachCell((cell, columnNumber) => {
   cell.note = columns[columnNumber - 1][2];
 });
 sheet.getColumn(5).numFmt = '@';
-sheet.getColumn(6).numFmt = '0';
-sheet.dataValidations.add('F2:F501', {
-  type: 'whole', operator: 'between', formulae: [0, 100], allowBlank: true,
-  showErrorMessage: true, errorTitle: 'Tiến độ không hợp lệ', error: 'Nhập số nguyên từ 0 đến 100.',
-});
+sheet.getColumn(6).numFmt = '@';
+sheet.getColumn(6).alignment = { vertical: 'top', wrapText: true };
 
 await mkdir(dirname(output), { recursive: true });
 await workbook.xlsx.writeFile(output);

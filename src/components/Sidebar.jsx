@@ -8,11 +8,13 @@ import { LogOut, PanelLeftClose, PanelLeftOpen, X, ChevronDown, ChevronRight } f
 import { visibleNavigation, navigationActive } from '@/lib/navigation';
 import { useAuth } from '@/context/AuthContext';
 
-function SidebarItem({ item, pathname, compact, onClose, onToggle }) {
-  const [expanded, setExpanded] = useState(true);
+function SidebarItem({ item, pathname, compact, onClose, onToggle, nested=false }) {
+  const [expansion, setExpansion] = useState(null);
   const submenuId = useId();
   const Icon = item.icon;
   const active = navigationActive(item, pathname);
+  const expanded = expansion?.pathname===pathname ? expansion.open : active;
+  const setExpanded = open => setExpansion({pathname,open});
   const className = `sidebar-menu-item relative flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors focus-ring ${compact ? 'justify-center' : ''} ${active ? 'bg-[#294368] text-white' : 'text-[#d4dfed] hover:bg-white/10 hover:text-white'}`;
   if (item.children) return <div>
     <button type="button" className={className} title={compact ? item.label : undefined} aria-label={compact ? item.label : undefined} aria-expanded={!compact && expanded} aria-controls={submenuId} onClick={() => { if (compact) { onToggle(); setExpanded(true); } else setExpanded(!expanded); }}>
@@ -20,12 +22,27 @@ function SidebarItem({ item, pathname, compact, onClose, onToggle }) {
       {!compact && <><span className="min-w-0 flex-1">{item.label}</span>{expanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</>}
     </button>
     {!compact && expanded && <div id={submenuId} className="ml-5 mt-1 space-y-1 border-l border-white/15 pl-2">
-      {item.children.map(child => <SidebarItem key={child.to} item={child} pathname={pathname} compact={false} onClose={onClose} onToggle={onToggle} />)}
+      {item.children.map(child => <SidebarItem key={child.to} item={child} pathname={pathname} compact={false} nested onClose={onClose} onToggle={onToggle} />)}
     </div>}
   </div>;
   return <Link href={item.to} title={compact ? item.label : undefined} aria-label={compact ? item.label : undefined} aria-current={active ? 'page' : undefined} onClick={onClose} className={`${className} ${active ? 'shadow-[inset_3px_0_0_#78a8f2]' : ''}`}>
-    <Icon size={18} className="shrink-0" strokeWidth={1.9} />{!compact && <span className="min-w-0">{item.label}</span>}
+    {!nested&&<Icon size={18} className="shrink-0" strokeWidth={1.9} />}{!compact && <span className="min-w-0">{item.label}</span>}
   </Link>;
+}
+
+function SidebarGroup({group,pathname,compact,onClose,onToggle}) {
+  const [expansion,setExpansion]=useState(null);
+  const id=useId();
+  const active=group.items.some(item=>navigationActive(item,pathname));
+  const expanded=expansion?.pathname===pathname?expansion.open:active||Boolean(group.defaultOpen);
+  const items=<div className="space-y-1">{group.items.map(item=><SidebarItem key={item.to||item.label} item={item} pathname={pathname} compact={compact} onClose={onClose} onToggle={onToggle}/>)}</div>;
+  if(group.items.length===1||compact)return <div>{items}</div>;
+  return <section aria-label={group.label}>
+    <button type="button" aria-expanded={expanded} aria-controls={id} onClick={()=>setExpansion({pathname,open:!expanded})} className={`mb-1 flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-semibold hover:bg-white/5 ${active?'text-white':'text-[#aebfd5]'}`}>
+      <span>{group.label}</span>{expanded?<ChevronDown size={14}/>:<ChevronRight size={14}/>}
+    </button>
+    {expanded&&<div id={id}>{items}</div>}
+  </section>;
 }
 
 export default function Sidebar({ collapsed = false, mobileOpen = false, onClose = () => {}, onToggle = () => {} }) {
@@ -39,21 +56,13 @@ export default function Sidebar({ collapsed = false, mobileOpen = false, onClose
         <Image src="/logo-otisminhchau2.png" alt="" width={40} height={40} priority className="h-10 w-10 shrink-0 rounded-lg bg-white object-contain p-1" />
         <span className="min-w-0"><strong className="block truncate text-sm font-bold tracking-[0.08em]">HR OTIS</strong><span className="block truncate text-[11px] text-slate-300">Quản trị nhân sự</span></span>
       </Link>}
-      <button type="button" onClick={() => { if (window.matchMedia('(min-width: 1024px)').matches) onToggle(); else onClose(); }} aria-controls="app-sidebar" aria-label={mobileOpen ? 'Đóng menu' : 'Thu gọn thanh bên'} title={mobileOpen ? 'Đóng menu' : compact ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'} className="icon-button shrink-0 focus-ring" style={{ color: '#fff' }}>
+      <button type="button" onClick={() => { if (window.matchMedia('(min-width: 1024px)').matches) onToggle(); else onClose(); }} aria-controls="app-sidebar" aria-label={mobileOpen ? 'Đóng menu' : compact ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'} title={mobileOpen ? 'Đóng menu' : compact ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'} className="icon-button shrink-0 focus-ring" style={{ color: '#fff' }}>
         <span className="lg:hidden"><X size={20} /></span>
         <span className="hidden lg:inline-flex">{compact ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}</span>
       </button>
     </div>
-    <nav className={`flex-1 space-y-5 overflow-y-auto px-3 py-5 ${mobileOpen ? '' : 'max-lg:hidden'}`} aria-label="Điều hướng chính">
-      {groups.map((group) => {
-        const items = group.items;
-        if (!items.length) return null;
-        return <div key={group.label}>
-          {!compact && <div className="px-3 pb-2 text-[13px] font-semibold leading-5 text-[#b8c8dc]">{group.label}</div>}
-          {compact && <div className="mx-3 mb-2 border-t border-white/10" />}
-          <div className="space-y-1">{items.map(item => <SidebarItem key={item.to || item.label} item={item} pathname={pathname} compact={compact} onClose={onClose} onToggle={onToggle} />)}</div>
-        </div>;
-      })}
+    <nav className={`flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-4 ${mobileOpen ? '' : 'max-lg:hidden'}`} aria-label="Điều hướng chính">
+      {groups.map(group=><SidebarGroup key={group.label} group={group} pathname={pathname} compact={compact} onClose={onClose} onToggle={onToggle}/>)}
     </nav>
     <div className={`border-t border-white/10 p-3 ${mobileOpen ? '' : 'max-lg:hidden'}`}>
       <button type="button" onClick={logout} title={compact ? 'Đăng xuất' : undefined} aria-label={compact ? 'Đăng xuất' : undefined} className={`sidebar-menu-item flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[#d4dfed] hover:bg-white/10 hover:text-white focus-ring ${compact ? 'justify-center' : ''}`}>

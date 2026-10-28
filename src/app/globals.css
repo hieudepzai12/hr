@@ -22,6 +22,8 @@ html, body {
   font-family: var(--font-body);
   background: var(--color-paper);
   color: var(--color-ink);
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 @media (max-width: 1023px) {
@@ -56,7 +58,7 @@ button:disabled { cursor: not-allowed; }
 @media print { .swal2-container { display: none !important; } }
 .sidebar-menu-item {
   font-family: var(--font-body);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   line-height: 20px;
 }
@@ -68,16 +70,15 @@ textarea:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
   outline-offset: 2px;
 }
 
-.ui-card { background: #fff; border: 1px solid var(--color-line); border-radius: 14px; box-shadow: 0 2px 12px rgb(18 39 72 / 4%); }
-.ui-field { width: 100%; min-height: 40px; border: 1px solid #cbd6e4; border-radius: 8px; background: #fff; padding: 8px 11px; font-size: 14px; color: var(--color-ink); }
+.ui-card { min-width: 0; background: #fff; border: 1px solid var(--color-line); border-radius: 12px; box-shadow: 0 1px 3px rgb(18 39 72 / 3%); }
+.ui-field, .form-control { width: 100%; min-height: 40px; border: 1px solid #cbd6e4; border-radius: 8px; background: #fff; padding: 8px 11px; font-size: 14px; color: var(--color-ink); }
 .ui-field.pl-9 { padding-left: 36px; }
-.form-control { width: 100%; min-height: 40px; border: 1px solid #cbd6e4; border-radius: 8px; background: #fff; padding: 8px 11px; font-size: 14px; color: var(--color-ink); }
-.form-label { display: block; margin-bottom: 5px; font-size: 13px; font-weight: 600; color: var(--color-ink); }
+.form-label, .ui-label { display: block; margin-bottom: 5px; font-size: 13px; font-weight: 600; color: var(--color-ink); }
 .ui-field:hover { border-color: #9eafc7; }
 .ui-field:disabled { background: #f0f3f7; color: #64748b; }
-.ui-label { display: block; margin-bottom: 5px; font-size: 13px; font-weight: 600; color: var(--color-ink); }
+.date-picker-input::-webkit-calendar-picker-indicator { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; cursor: pointer; }
 .ui-help { font-size: 12px; color: var(--color-slate); }
-.ui-button { display: inline-flex; min-height: 38px; align-items: center; justify-content: center; gap: 7px; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; transition: background-color .15s, border-color .15s; }
+.ui-button { display: inline-flex; min-height: 40px; align-items: center; justify-content: center; gap: 7px; border-radius: 8px; padding: 8px 14px; font-size: 14px; font-weight: 600; line-height: 1.4; transition: background-color .15s, border-color .15s; }
 .ui-button-primary { background: var(--color-teal); color: #fff; }
 .ui-button-primary:hover { background: var(--color-teal-dark); }
 .ui-button-secondary { border: 1px solid #cbd6e4; background: #fff; color: var(--color-ink); }
@@ -85,17 +86,38 @@ textarea:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
 .ui-button:disabled { opacity: .6; }
 .icon-button { display: inline-flex; width: 38px; height: 38px; align-items: center; justify-content: center; border-radius: 8px; color: #405675; }
 .icon-button:hover { background: #edf2f8; }
-.ui-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+.ui-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 14px; line-height: 1.5; }
 .ui-table thead { background: #f5f8fc; color: #435774; }
-.ui-table th { padding: 12px 14px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-align: left; text-transform: uppercase; white-space: nowrap; }
-.ui-table td { padding: 13px 14px; border-top: 1px solid #e5eaf1; vertical-align: middle; }
+.ui-table th { padding: 12px 16px; font-size: 12px; font-weight: 600; letter-spacing: .01em; text-align: left; white-space: nowrap; }
+.ui-table td { padding: 12px 16px; border-top: 1px solid #e5eaf1; vertical-align: middle; overflow-wrap: anywhere; }
 .ui-table tbody tr:hover { background: #f9fbfe; }
+.task-list-table { table-layout: fixed; min-width: 560px; }
+.task-list-table th, .task-list-table td { padding: 12px; }
+.task-list-table td { vertical-align: top; overflow-wrap: break-word; }
+.task-list-table .task-group-heading td { padding: 11px 14px; background: #edf3fa; border-top: 1px solid #d5dfed; border-bottom: 1px solid #d5dfed; border-left: 3px solid var(--color-teal); }
+.task-list-table .task-group-heading strong { font-size: 15px; color: #17375f; }
+.task-group-count { padding: 3px 8px; border-radius: 6px; background: #fff; color: #536780; font-size: 12px; white-space: nowrap; }
+.task-list-table .task-col-title { width: auto; }
+.task-list-table .task-col-deadline { width: 128px; }
+.task-list-table .task-col-actions { width: 144px; }
+.task-list-table .ui-button { min-width: 52px; min-height: 36px; padding: 7px 10px; }
 .task-plan-table { min-width: 960px; }
 .ui-empty { padding: 36px 16px; text-align: center; color: var(--color-slate); font-size: 14px; }
 .ui-notice { border: 1px solid #f3ccd1; border-radius: 8px; background: #fff3f4; padding: 10px 12px; color: #9d2738; font-size: 13px; }
 .progress-track { height: 7px; overflow: hidden; border-radius: 99px; background: #e5ebf3; }
 .progress-fill { height: 100%; border-radius: inherit; background: #2d67ae; }
-.section-heading { margin-bottom: 12px; color: var(--color-ink); font-size: 14px; font-weight: 700; }
+.section-heading { margin-bottom: 12px; color: var(--color-ink); font-size: 15px; font-weight: 600; }
+.ui-field::placeholder, .form-control::placeholder { color: #718097; opacity: 1; }
+.ui-field:read-only:not(select), .form-control:read-only:not(select) { background: #f6f8fb; }
+@media (max-width: 639px) {
+  .ui-field, .form-control { font-size: 16px; }
+  .ui-button { min-height: 42px; }
+  .task-list-table .ui-button { min-height: 42px; }
+  .ui-table th, .ui-table td { padding: 11px 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0s !important; animation-duration: 0s !important; }
+}
 .required-mark { margin-left: 3px; color: var(--color-clay); }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }

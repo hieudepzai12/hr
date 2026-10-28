@@ -9,6 +9,7 @@ import { migratePositionRoleDescription } from './migrations/010-position-role-d
 import { migrateProjectDepartments } from './migrations/011-project-departments.js';
 import { migrateSalaryBudgetGroups } from './migrations/012-salary-budget-groups.js';
 import { migrateDepartmentBonuses } from './migrations/013-department-bonuses.js';
+import { migrateTaskProgressText } from './migrations/014-task-progress-text.js';
 // DATE has no timezone; preserve yyyy-mm-dd rather than converting through local midnight.
 types.setTypeParser(1082, (value) => value);
 
@@ -93,7 +94,7 @@ export async function queryOne(text, params) {
 }
 
 let schemaReadyPromise = null;
-const SCHEMA_VERSION = 13;
+const SCHEMA_VERSION = 14;
 
 /** Đảm bảo bảng đã được tạo & seed dữ liệu mẫu. Gọi an toàn nhiều lần — chỉ chạy thật sự một lần. */
 export function ensureSchema() {
@@ -445,6 +446,11 @@ export async function migrateSchema() {
     if(!departmentBonusMigration.rowCount){
       await migrateDepartmentBonuses(client);
       await client.query('INSERT INTO schema_migrations(version) VALUES (13)');
+    }
+    const progressTextMigration = await client.query('SELECT 1 FROM schema_migrations WHERE version=14');
+    if (!progressTextMigration.rowCount) {
+      await migrateTaskProgressText(client);
+      await client.query('INSERT INTO schema_migrations(version) VALUES (14)');
     }
   });
 }

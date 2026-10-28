@@ -96,7 +96,7 @@ function Content() {
     } catch (error) { setDeleteError(error.response?.data?.error || 'Không xóa được bộ quyền.'); }
     finally { setSaving(false); }
   };
-  return <Layout title="Phân quyền" subtitle="Quản lý quyền theo vai trò. Mọi người cùng vai trò dùng chung bộ quyền.">
+  return <Layout title="Phân quyền">
     <div className="grid min-w-0 gap-6 lg:h-[calc(100dvh-124px)] lg:min-h-0 lg:grid-cols-[280px_minmax(0,1fr)]">
       <div className="min-w-0 bg-paper-raised rounded-lg border border-line p-3 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain">
         <div className="flex items-center justify-between gap-2 px-3 py-2"><h2 className="text-sm font-semibold">Bộ phân quyền</h2><button onClick={() => { setCreateError(''); setCreateOpen(true); }} className="p-1.5 rounded text-teal hover:bg-paper focus-ring" aria-label="Thêm bộ phân quyền" title="Thêm bộ phân quyền"><Plus size={18} /></button></div>
@@ -122,7 +122,7 @@ function Content() {
     {createOpen && <Modal title="Thêm bộ phân quyền" onClose={() => setCreateOpen(false)}>
       <form onSubmit={create} className="space-y-4">
         <div><label htmlFor="role-name" className="block text-sm font-medium mb-1">Tên bộ phân quyền</label><input id="role-name" autoFocus required minLength={2} maxLength={60} value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Ví dụ: Trưởng nhóm" className="w-full px-3 py-2 rounded-md border border-line bg-white text-sm focus-ring" /></div>
-        <p className="text-xs text-slate">Sau khi tạo, chọn quyền xem và quản lý cho vai trò mới.</p>
+
         {createError && <p role="alert" className="text-sm text-clay">{createError}</p>}
         <div className="flex justify-end gap-2"><button type="button" onClick={() => setCreateOpen(false)} className="px-4 py-2 text-sm rounded-md border border-line">Hủy</button><button disabled={saving} type="submit" className="px-4 py-2 text-sm rounded-md bg-teal text-white disabled:opacity-50">{saving ? 'Đang tạo...' : 'Tạo bộ quyền'}</button></div>
       </form>

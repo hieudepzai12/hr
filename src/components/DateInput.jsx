@@ -1,7 +1,8 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { format, isValid, parse, parseISO } from 'date-fns';
+import { CalendarDays } from 'lucide-react';
 
 function toDisplayDate(value) {
   if (!value) return '';
@@ -11,6 +12,7 @@ function toDisplayDate(value) {
 
 export default function DateInput({ label, value, onChange, required = false, disabled = false }) {
   const id = useId();
+  const textInput = useRef(null);
   const [draft, setDraft] = useState(() => ({ value, text: toDisplayDate(value) }));
 
   if (draft.value !== value) {
@@ -32,7 +34,9 @@ export default function DateInput({ label, value, onChange, required = false, di
   return (
     <div>
       <label htmlFor={id} className="form-label">{label}</label>
+      <div className="relative">
       <input
+        ref={textInput}
         id={id}
         type="text"
         inputMode="numeric"
@@ -42,7 +46,30 @@ export default function DateInput({ label, value, onChange, required = false, di
         value={draft.text}
         onChange={handleChange}
         className="form-control"
+        style={{ paddingRight: 44 }}
       />
+      <span className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-lg text-slate focus-within:ring-2 focus-within:ring-blue-500">
+        <CalendarDays size={18} aria-hidden="true" className="pointer-events-none" />
+        <input
+          type="date"
+          lang="vi"
+          aria-label={`Chọn ngày: ${label}`}
+          title={`Chọn ngày: ${label}`}
+          disabled={disabled}
+          value={draft.text === toDisplayDate(value) ? String(value || '').slice(0, 10) : ''}
+          className="date-picker-input absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          onClick={event=>{
+            try { event.currentTarget.showPicker?.(); } catch { event.currentTarget.focus(); }
+          }}
+          onChange={event=>{
+            const next=event.target.value;
+            textInput.current?.setCustomValidity('');
+            setDraft({value:next,text:toDisplayDate(next)});
+            onChange(next);
+          }}
+        />
+      </span>
+      </div>
     </div>
   );
 }

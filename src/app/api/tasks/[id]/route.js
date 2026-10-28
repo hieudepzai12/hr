@@ -39,12 +39,12 @@ export const PUT = withAuth(async (req, { params }, user) => {
   const managerFields = ['title', 'description', 'assignee_id', 'department_id', 'customer_id', 'project_id', 'business_group',
     'data_period', 'expected_outcome', 'priority', 'start_date', 'due_date', 'planned_progress_date',
     'planned_progress', 'collaborator_ids', 'leader_opinion'];
-  if (before.status === 'done' && (body.status !== undefined || body.progress !== undefined)) {
+  if (before.status === 'done' && (body.status !== undefined || body.progress !== undefined || body.progress_text !== undefined)) {
     return NextResponse.json({ error: 'Công việc đã nghiệm thu đang khóa tiến độ' }, { status: 409 });
   }
   if (user.role === 'employee' && managerFields.some((field) => body[field] !== undefined)) return forbidden('Bạn chỉ được cập nhật phần việc của mình');
   if (!canEdit && managerFields.some((field) => body[field] !== undefined && body[field] !== before[field])) return forbidden('Bạn chỉ được cập nhật phần việc của mình');
-  if (!participant && (body.status !== undefined || body.progress !== undefined)) return forbidden('Chỉ người được giao mới cập nhật tiến độ');
+  if (!participant && (body.status !== undefined || body.progress !== undefined || body.progress_text !== undefined)) return forbidden('Chỉ người được giao mới cập nhật tiến độ');
   if (body.leader_opinion !== undefined) return forbidden('Ý kiến lãnh đạo phải được ghi ở bước nghiệm thu');
   if (!canEdit && body.status && !['todo', 'in_progress', 'review'].includes(body.status)) return forbidden();
   if (body.due_date !== undefined && body.due_date !== before.due_date && !String(body.reason || '').trim()) {
@@ -55,7 +55,15 @@ export const PUT = withAuth(async (req, { params }, user) => {
     if (!customer) return NextResponse.json({ error: 'Khách hàng không hoạt động hoặc không tồn tại' }, { status: 400 });
   }
   const assigneeId = Number(body.assignee_id || before.assignee_id);
-  const departmentId = Number(body.department_id || before.department_id);
+  const selectedDepartment = body.department_id === undefined ? before.department_id : body.department_id;
+  const departmentId = selectedDepartment == null || selectedDepartment === '' ? null : Number(selectedDepartment);
+  if ((body.department_id !== undefined && departmentId === null && user.role !== 'admin') ||
+    (departmentId !== null && (!Number.isSafeInteger(departmentId) || departmentId <= 0 || departmentId > 2147483647))) {
+    return NextResponse.json({ error: 'Phòng ban không hợp lệ' }, { status: 400 });
+  }
+  if (body.department_id !== undefined && departmentId !== null && !await queryOne('SELECT 1 FROM departments WHERE id=$1', [departmentId])) {
+    return NextResponse.json({ error: 'Phòng ban không tồn tại. Vui lòng chọn lại phòng ban.' }, { status: 400 });
+  }
   const normalizedId=(value)=>value===null||value===''?null:Number(value);
   const changedLink=body.project_id!==undefined&&normalizedId(body.project_id)!==normalizedId(before.project_id);
   const changedContext=before.project_id&&((body.department_id!==undefined&&normalizedId(body.department_id)!==normalizedId(before.department_id))||(body.customer_id!==undefined&&normalizedId(body.customer_id)!==normalizedId(before.customer_id)));
@@ -68,9 +76,9 @@ export const PUT = withAuth(async (req, { params }, user) => {
     const cols = canEdit ? ['title', 'description', 'assignee_id', 'department_id', 'customer_id', 'project_id', 'business_group',
       'data_period', 'expected_outcome', 'priority', 'start_date', 'due_date', 'planned_progress_date',
       'planned_progress'] : [];
-    if (participant) cols.push('status', 'progress');
+    if (participant) cols.push('status', 'progress', 'progress_text');
     if (cols.length === 0) return before;
-    const values = cols.map((column) => body[column] === undefined ? before[column] : body[column] === '' ? null : body[column]);
+    const values = cols.map((column) => body[column] === undefined ? before[column] : body[column] === '' && column !== 'progress_text' ? null : body[column]);
     const { rows } = await client.query(`UPDATE tasks SET ${cols.map((column, index) => `${column}=$${index + 1}`).join(', ')},
       updated_at=NOW() WHERE id=$${cols.length + 1} RETURNING *`, [...values, id]);
     if (canEdit && body.collaborator_ids) {

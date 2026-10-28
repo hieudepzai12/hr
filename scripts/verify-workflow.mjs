@@ -14,7 +14,7 @@ const password = randomUUID() + randomUUID();
 const ids = {};
 const base = process.env.VERIFY_BASE_URL || 'http://localhost:3000';
 if (!['localhost', '127.0.0.1'].includes(new URL(base).hostname)) throw new Error('Local API only');
-let taskId, reportId, importedTaskId, evaluationId, sharedTaskId;
+let taskId, reportId, importedTaskId, evaluationId, sharedTaskId, adminTaskId;
 const request = async (path, cookie, method = 'GET', body) => {
   const response = await fetch(base + path, { method, headers: {
     cookie, ...(body ? { 'content-type': 'application/json' } : {}),
@@ -41,6 +41,9 @@ try {
   const admin = ids.admin.cookie;
   const employee = ids.employee.cookie;
   const other = ids.other.cookie;
+  assert.equal((await request(`/api/profiles/${ids.employee.id}`, employee)).status, 200);
+  assert.equal((await request(`/api/profiles/${ids.other.id}`, employee)).status, 404, 'Personal profile cannot expose another employee');
+  assert.equal((await request(`/api/profiles/${ids.other.id}`, admin)).status, 200, 'Granted profile scope is preserved');
   assert.equal((await request('/api/dashboard/stats', admin)).status, 200);
   assert.equal((await request('/api/dashboard/stats', employee)).status, 200);
   assert.equal((await request('/api/tasks/alerts', employee)).status, 200);
@@ -48,13 +51,25 @@ try {
     title: `Denied assignment ${suffix}`, assignee_id: ids.other.id,
   });
   assert.equal(deniedAssignment.status, 403, 'Employee cannot create work for another person');
+  assert.equal((await request('/api/tasks',admin,'POST',{title:'Invalid department',department_id:'not-a-number'})).status,400);
+  assert.equal((await request('/api/tasks',admin,'POST',{title:'Missing department',department_id:2147483647})).status,400);
+  await db.query('UPDATE employees SET department_id=NULL WHERE id=$1',[ids.admin.id]);
+  const adminWork=await request('/api/tasks',admin,'POST',{title:`Admin work ${suffix}`});
+  assert.equal(adminWork.status,201,'Admin can create work without a department');
+  adminTaskId=adminWork.data.id;
+  assert.equal(adminWork.data.department_id,null);
+  const editedAdminWork=await request(`/api/tasks/${adminTaskId}`,admin,'PUT',{title:`Admin work edited ${suffix}`,department_id:''});
+  assert.equal(editedAdminWork.status,200);
+  assert.equal(editedAdminWork.data.department_id,null);
+  await db.query('UPDATE employees SET department_id=$1 WHERE id=$2',[departments[0].id,ids.admin.id]);
   const task = await request('/api/tasks', employee, 'POST', {
     title: `Verify task ${suffix}`,
-    department_id: departments[0].id, due_date: '2026-10-18', status: 'todo', progress: 0,
+    due_date: '2026-10-18', status: 'todo', progress: 0,
   });
   assert.equal(task.status, 201, `task: ${task.data.error}`);
   taskId = task.data.id;
   assert.equal(Number(task.data.assignee_id), Number(ids.employee.id), 'Self-created work belongs to the employee');
+  assert.equal(task.data.department_id,departments[0].id,'Employee department is inferred when omitted');
   const page = await request(`/api/tasks?limit=1&offset=0&include_total=1&search=${encodeURIComponent(suffix)}`, employee);
   assert.equal(page.data.total, 1, 'Pagination total respects search and employee scope');
   assert.equal(page.data.items.length, 1);
@@ -75,6 +90,12 @@ try {
   assert.equal((await db.query('SELECT count(*)::int AS c FROM reports WHERE title=$1', [`Denied ${suffix}`])).rows[0].c, 0);
   await db.query(`INSERT INTO task_updates(task_id,employee_id,progress,result,next_step,blockers,solution)
     VALUES ($1,$2,37,'Own result','Next action','Obstacle','Solution')`, [taskId, ids.employee.id]);
+  const textUpdate = { progress_text: 'Đã đối chiếu chứng từ\n- Đang tổng hợp số liệu', result: 'Own result', next_step: 'Next action', blockers: 'Obstacle', solution: 'Solution' };
+  assert.equal((await request(`/api/tasks/${taskId}/updates`, other, 'POST', textUpdate)).status, 403);
+  assert.equal((await request(`/api/tasks/${taskId}/updates`, employee, 'POST', { ...textUpdate, progress_text: 42 })).status, 400);
+  assert.equal((await request(`/api/tasks/${taskId}/updates`, employee, 'POST', { ...textUpdate, progress_text: 'x'.repeat(10001) })).status, 400);
+  assert.equal((await request(`/api/tasks/${taskId}/updates`, employee, 'POST', { ...textUpdate, progress: 37 })).status, 201);
+  assert.equal((await request(`/api/tasks/${taskId}`, employee)).data.progress_text, textUpdate.progress_text);
   sharedTaskId = (await db.query(`INSERT INTO tasks(title,assignee_id,created_by,department_id)
     VALUES ($1,$2,$3,$4) RETURNING id`, [`Shared ${suffix}`, ids.other.id, ids.admin.id, departments[0].id])).rows[0].id;
   await db.query('INSERT INTO task_collaborators(task_id,employee_id) VALUES ($1,$2)', [sharedTaskId, ids.employee.id]);
@@ -87,8 +108,19 @@ try {
   });
   assert.equal(report.status, 201, `report: ${report.data.error}`);
   reportId = report.data.id;
+  const linkedReports = await request(`/api/reports?task_id=${taskId}`, employee);
+  assert.equal(linkedReports.status, 200);
+  assert.ok(linkedReports.data.some(row=>row.id===reportId));
+  const listSummary=linkedReports.data.find(row=>row.id===reportId).task_summaries.find(item=>item.task_id===taskId);
+  assert.equal(listSummary.progress_text,textUpdate.progress_text);
+  assert.equal(listSummary.due_date,'2026-10-18');
+  assert.equal(listSummary.blockers,'Obstacle');
+  assert.equal(listSummary.solution,'Solution');
+  assert.deepEqual((await request(`/api/reports?task_id=${taskId}`, other)).data, [], 'Task filter cannot bypass report scope');
+  assert.equal((await request('/api/reports?task_id=invalid', admin)).status, 400);
   const snapshot = (await db.query('SELECT snapshot FROM report_items WHERE report_id=$1', [reportId])).rows[0].snapshot;
   assert.equal(snapshot.progress, 37);
+  assert.equal(snapshot.progress_text, textUpdate.progress_text);
   assert.equal(snapshot.result, 'Own result');
   const versionSnapshot = (await db.query('SELECT snapshot FROM report_versions WHERE report_id=$1 AND version=1', [reportId])).rows[0].snapshot;
   assert.equal(versionSnapshot.items[0].snapshot.progress, 37);
@@ -97,6 +129,13 @@ try {
   assert.equal(versionSnapshot.items[1].snapshot.progress, 63);
   assert.equal(versionSnapshot.items[1].snapshot.result, 'Collaborator result');
   await db.query('UPDATE tasks SET progress=99 WHERE id=$1', [taskId]);
+  assert.equal((await request(`/api/tasks/${taskId}/updates`, employee, 'POST', { ...textUpdate, progress_text: 'Nội dung tuần sau' })).status, 201);
+  assert.equal((await request(`/api/reports?task_id=${taskId}`, employee)).data.find(row=>row.id===reportId).task_summaries.find(item=>item.task_id===taskId).progress_text,textUpdate.progress_text,'Report list uses its saved snapshot, not current task progress');
+  await db.query("UPDATE tasks SET status='done' WHERE id=$1", [taskId]);
+  assert.equal((await request(`/api/tasks/${taskId}/updates`, employee, 'POST', textUpdate)).status, 409);
+  assert.equal((await request(`/api/tasks/${taskId}`, employee, 'PUT', { progress_text: 'Cannot change locked work' })).status, 409);
+  await db.query("UPDATE tasks SET status='in_progress' WHERE id=$1", [taskId]);
+  assert.equal((await db.query('SELECT snapshot FROM report_versions WHERE report_id=$1 AND version=1', [reportId])).rows[0].snapshot.items[0].snapshot.progress_text, textUpdate.progress_text);
   assert.equal((await db.query('SELECT snapshot FROM report_versions WHERE report_id=$1 AND version=1', [reportId])).rows[0].snapshot.items[0].snapshot.progress, 37);
   assert.equal((await request(`/api/reports/${reportId}`, other)).status, 403);
   const review = await request(`/api/reports/${reportId}/review`, admin, 'PUT', { status: 'approved', feedback: 'OK' });
@@ -119,6 +158,7 @@ try {
   const sheet = workbook.addWorksheet('Kế hoạch');
   sheet.addRow(['Công việc', 'Người thực hiện', 'Hạn chót', 'Tiến độ', 'KPI']);
   sheet.addRow([`Imported ${suffix}`, `Verify employee ${suffix}`, '18/10/2026', 0.9, 'Đã hoàn thành']);
+  sheet.addRow([`Imported ${suffix}`, `Verify employee ${suffix}`, '18/10/2026', 0.9, 'Đã hoàn thành']);
   const excel = await workbook.xlsx.writeBuffer();
   const importRequest = async (action, overrides = {}) => {
     const form = new FormData();
@@ -132,13 +172,28 @@ try {
   assert.equal(preview.status, 200, `Excel preview: ${preview.data.error}`);
   assert.equal(preview.data.rows[0].progress, 90);
   assert.equal(preview.data.rows[0].status, 'review');
+  assert.equal(preview.data.rows[1].duplicate,true,'Repeated rows within one file are skipped');
   const key = preview.data.rows[0].source_key;
-  const imported = await importRequest('commit', { [key]: { progress_confirmed: true } });
-  assert.equal(imported.status, 200, `Excel commit: ${imported.data.error}`);
-  assert.equal(imported.data.imported, 1);
+  const invalidImport=await importRequest('commit');
+  assert.equal(invalidImport.status,400,'Unconfirmed progress reports an error');
+  assert.equal((await db.query('SELECT COUNT(*)::int AS count FROM tasks WHERE title=$1',[`Imported ${suffix}`])).rows[0].count,0,'Invalid import creates no work');
+  const secondBook=new ExcelJS.Workbook();const secondSheet=secondBook.addWorksheet('Copy');
+  secondSheet.addRow(['Công việc','Người thực hiện','Hạn chót','Tiến độ']);
+  secondSheet.addRow([`IMPORTED   ${suffix}`,`Verify employee ${suffix}`,'18/10/2026',90]);
+  const secondExcel=await secondBook.xlsx.writeBuffer();
+  const secondForm=new FormData();secondForm.append('file',new Blob([secondExcel]),'copy.xlsx');secondForm.append('action','commit');
+  const commits=await Promise.all([
+    importRequest('commit',{[key]:{progress_confirmed:true}}),
+    fetch(base+'/api/tasks/import',{method:'POST',headers:{cookie:admin},body:secondForm}).then(async response=>({status:response.status,data:await response.json()})),
+  ]);
+  for(const result of commits)assert.equal(result.status,200,`Excel commit: ${result.data.error}`);
+  assert.equal(commits.reduce((sum,result)=>sum+result.data.imported,0),1,'Concurrent files keep only one normalized work item');
+  const imported=commits.find(result=>result.data.imported===1);
   importedTaskId = imported.data.task_ids[0];
   const repeated = await importRequest('preview');
   assert.equal(repeated.data.rows[0].duplicate, true);
+  const repeatedCommit=await importRequest('commit',{[key]:{progress_confirmed:true}});
+  assert.equal(repeatedCommit.status,200);assert.equal(repeatedCommit.data.imported,0);assert.equal(repeatedCommit.data.skipped,2);
   const evidence = await request(`/api/kpi/evidence?employee_id=${ids.employee.id}`, admin);
   assert.equal(evidence.status, 200, `KPI evidence: ${evidence.data.error}`);
   assert.ok(evidence.data.tasks.some((item) => item.id === taskId));
@@ -150,11 +205,39 @@ try {
   assert.equal(evaluation.status, 201, `KPI create: ${evaluation.data.error}`);
   evaluationId = evaluation.data.id;
   assert.equal(evaluation.data.evidence.length, 2);
+  const accountEmail = `verify-created-${suffix}@example.invalid`;
+  const account = await request('/api/employees', admin, 'POST', { full_name: `Created account ${suffix}`, email: accountEmail, password, role: 'employee', department_id: departments[0].id });
+  assert.equal(account.status, 201, `Account create: ${account.data.error}`);
+  ids.created = { id: account.data.id, email: accountEmail };
+  assert.equal(account.data.password_hash, undefined);
+  assert.equal((await request('/api/employees', admin, 'POST', { full_name: 'Duplicate', email: accountEmail, password })).status, 400);
+  const createdLogin = await request('/api/auth/login', '', 'POST', { email: accountEmail, password });
+  assert.equal(createdLogin.status, 200);
+  const resetPassword = randomUUID() + randomUUID();
+  assert.equal((await request(`/api/employees/${account.data.id}/reset-password`, employee, 'POST', { new_password: resetPassword })).status, 403);
+  assert.equal((await request(`/api/employees/${account.data.id}/reset-password`, admin, 'POST', { new_password: resetPassword })).status, 200);
+  assert.equal((await request('/api/employees', createdLogin.cookie)).status, 401, 'Password reset revokes previous session');
+  assert.equal((await request('/api/auth/login', '', 'POST', { email: accountEmail, password })).status, 401);
+  const newLogin = await request('/api/auth/login', '', 'POST', { email: accountEmail, password: resetPassword });
+  assert.equal(newLogin.status, 200);
+  assert.equal((await request('/api/auth/change-password', newLogin.cookie, 'POST', { current_password: 'incorrect', new_password: password })).status, 400);
+  assert.equal((await request('/api/auth/change-password', newLogin.cookie, 'POST', { current_password: resetPassword, new_password: password })).status, 200);
+  const restoredLogin = await request('/api/auth/login', '', 'POST', { email: accountEmail, password });
+  assert.equal(restoredLogin.status, 200);
+  assert.equal((await request(`/api/employees/${account.data.id}`, employee, 'DELETE')).status, 403);
+  assert.equal((await request(`/api/employees/${ids.admin.id}`, admin, 'DELETE')).status, 403);
+  assert.equal((await request(`/api/employees/${account.data.id}`, admin, 'DELETE')).status, 200);
+  assert.equal((await request('/api/auth/login', '', 'POST', { email: accountEmail, password })).status, 403);
+  assert.equal((await request('/api/employees', restoredLogin.cookie)).status, 401, 'Inactive account session is denied');
+  const adminPassword = randomUUID()+randomUUID();
+  assert.equal((await request('/api/auth/change-password', admin, 'POST', {new_password:adminPassword})).status, 200, 'Admin can change own password without current password');
+  assert.equal((await request('/api/auth/login', '', 'POST', {email:ids.admin.email,password:adminPassword})).status, 200);
   console.log('Workflow checks passed: permissions, report lock/version/restore, Excel preview/import/duplicate, KPI evidence');
 } finally {
   if (evaluationId) await db.query('DELETE FROM kpi_evaluations WHERE id=$1', [evaluationId]);
   if (reportId) await db.query('DELETE FROM reports WHERE id=$1', [reportId]);
   if (taskId) await db.query('DELETE FROM tasks WHERE id=$1', [taskId]);
+  if (adminTaskId) await db.query('DELETE FROM tasks WHERE id=$1', [adminTaskId]);
   if (sharedTaskId) await db.query('DELETE FROM tasks WHERE id=$1', [sharedTaskId]);
   if (importedTaskId) await db.query('DELETE FROM tasks WHERE id=$1', [importedTaskId]);
   for (const person of Object.values(ids)) {

@@ -92,6 +92,7 @@ export async function parseExcelTasks(buffer) {
         data_period: get('data_period'), due_date: dateValue(get('due_date')),
         invalid_due_date: Boolean(get('due_date') && !dateValue(get('due_date'))),
         progress: !progressRaw || !Number.isFinite(progressNumber) ? null : fraction ? Math.round(progressNumber * 100) : progressNumber,
+        progress_text: progressRaw && !Number.isFinite(progressNumber) ? progressRaw : '',
         confirm_fraction: fraction, result: get('result'), blockers: get('blockers'), solution: get('solution'),
         status: completed ? 'review' : 'todo',
       });

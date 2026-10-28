@@ -36,7 +36,7 @@ function KpiContent() {
   const [evidenceOptions, setEvidenceOptions] = useState({ tasks: [], reports: [] });
   const [error,setError]=useFeedback('error');
   const [saving, setSaving] = useState(false);
-  const [notice,setNotice]=useFeedback('success');
+  const [,setNotice]=useFeedback('success');
 
   useEffect(() => { if (isManager) api.get('/employees', { params: { fields: 'options', status: 'active' } }).then(({ data }) => setEmployees(data)); }, [isManager]);
 
@@ -93,7 +93,6 @@ function KpiContent() {
   return (
     <Layout
       title="Đánh giá KPI"
-      subtitle="Hiệu suất làm việc theo từng kỳ đánh giá"
       actions={isManager && (
         <button onClick={openCreate} className="ui-button ui-button-primary">
           <Plus size={16} /> Tạo đánh giá

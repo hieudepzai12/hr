@@ -53,7 +53,7 @@ export function buildTaskPlanQuery({ userId, departmentId, viewScope, printScope
   }
 
   const sql = `SELECT t.id, t.title, t.description, t.expected_outcome, t.priority, t.status,
-      t.progress, t.start_date, t.due_date, t.blockers, t.proposed_solution, t.leader_opinion,
+      t.progress, t.progress_text, t.start_date, t.due_date, t.blockers, t.proposed_solution, t.leader_opinion,
       e.full_name AS assignee_name,
       d.name AS department_name, c.name AS customer_name,
       COALESCE(collaborators.names, '') AS collaborator_names

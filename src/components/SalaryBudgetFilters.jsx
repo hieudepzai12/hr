@@ -11,7 +11,7 @@ export default function SalaryBudgetFilters({ value, departments=[], canRestore,
   const normalize=text=>text.toLocaleLowerCase('vi').normalize('NFD').replace(/\p{M}/gu,'').replaceAll('\u0111','d');
   const choices=departments.filter(item=>normalize(item.name).includes(normalize(query.trim())));
   const selected=value.department?value.department.split(',').map(Number):[];
-  const change=(key,next)=>onChange({...value,search:'',[key]:next});
+  const change=(key,next)=>onChange({...value,[key]:next});
   const toggle=(departmentId,checked)=>change('department',(checked?[...selected,departmentId]:selected.filter(item=>item!==departmentId)).join(','));
   return <section aria-label="Bộ lọc ngân sách" className="ui-card mb-4 p-4">
     <div className="mb-4 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold">Bộ lọc ngân sách</h2><button type="button" onClick={()=>{setQuery('');onReset();}} className="ui-button ui-button-secondary"><RotateCcw size={14} aria-hidden="true"/>Đặt lại bộ lọc</button></div>

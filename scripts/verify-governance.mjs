@@ -21,7 +21,7 @@ const ok=async(path,cookie,method='GET',body,expected=200)=>{const result=await 
 const add=async(resource,body,actor='admin')=>ok(`/governance/${resource}`,actors[actor].cookie,'POST',body,201);
 const change=async(resource,row,action,actor='reviewer',reason='Local verification')=>ok(`/governance/${resource}/${row.id}`,actors[actor].cookie,'PATCH',{version:row.version,action,reason});
 try{
-  assert.equal((await db.query('SELECT MAX(version)::int AS version FROM schema_migrations')).rows[0].version,13);
+  assert.equal((await db.query('SELECT MAX(version)::int AS version FROM schema_migrations')).rows[0].version,14);
   const midnight=new Date('2026-10-18T17:01:00Z');assert.equal(vietnamToday(midnight),'2026-10-19');
   for(const [due,kind] of [['2026-10-22','upcoming'],['2026-10-20','upcoming'],['2026-10-19','today'],['2026-10-18','overdue']])assert.equal(deadlineAlert({due_date:due,status:'in_progress'},midnight).kind,kind);
   assert.equal(deadlineAlert({due_date:'2026-10-18',status:'review'},midnight).kind,'review');
@@ -299,12 +299,31 @@ try{
   await ok('/permissions',admin,'PUT',{role,permissions:oldPermissions});
   console.log('PASS: local migration schema, deny-by-default permissions, department isolation, validation, cycles, headcount, project/task links, approval locks, versions, recovery, exact VND calculations, scoped summaries, private document links and legacy task/report workflows.');
   if(process.argv.includes('--browser')||process.argv.includes('--browser-duties')||process.argv.includes('--browser-chart')||process.argv.includes('--browser-tasks')||process.argv.includes('--browser-menus')||process.argv.includes('--browser-feedback')){
+    if(process.argv.includes('--browser-tasks'))await db.query('UPDATE employees SET department_id=NULL WHERE id=$1',[actors.admin.id]);
     if(process.argv.includes('--browser-duties'))for(let i=1;i<=3;i++)await add('positions',{code:`UI-${suffix}-${i}`,name:`Chức vụ thử giao diện ${i}`,department_id:departmentIds[0],responsibilities:'1. Lập kế hoạch và theo dõi công việc trong phạm vi được giao.\n2. Tổng hợp hồ sơ, kiểm tra số liệu và phối hợp phòng ban.\n3. Báo cáo tiến độ, kết quả và các vấn đề cần hỗ trợ.\n4. Lưu căn cứ và đề xuất cải thiện quy trình.\n5. Bảo mật thông tin và hồ sơ nội bộ.',requirements:'Phối hợp với người phụ trách phòng ban; báo cáo đúng thời hạn và tuân thủ quyền được cấp.',verification_status:'needs_verification'});
     const {spawnSync}=await import('node:child_process');
     const {readFile}=await import('node:fs/promises');
+    const {mkdir}=await import('node:fs/promises');
+    const {resolve}=await import('node:path');
+    const {default:ExcelJS}=await import('exceljs');
+    await mkdir('.next-verify/ui-fixtures',{recursive:true});
+    const importFile=resolve('.next-verify/ui-fixtures/import-ui.xlsx');
+    const importDepartment=(await db.query('SELECT name FROM departments WHERE id=$1',[departmentIds[0]])).rows[0].name;
+    const workbook=new ExcelJS.Workbook();const sheet=workbook.addWorksheet('UI');
+    sheet.addRow(['Công việc','Người thực hiện','Hạn chót','Tiến độ','Phòng ban']);
+    sheet.addRow([`Excel UI ${suffix}`,`Verify admin ${suffix}`,'31/12/2026',0,importDepartment]);
+    await workbook.xlsx.writeFile(importFile);
+    const importReviewFiles={};
+    for(const width of [390,1440]){
+      const reviewBook=new ExcelJS.Workbook();const reviewSheet=reviewBook.addWorksheet('UI');
+      reviewSheet.addRow(['Công việc','Người thực hiện','Hạn chót','Tiến độ','Phòng ban']);
+      reviewSheet.addRow([`Excel review ${width} ${suffix}`,`Verify admin ${suffix}`,'',0.9,importDepartment]);
+      importReviewFiles[width]=resolve(`.next-verify/ui-fixtures/review-ui-${width}.xlsx`);
+      await reviewBook.xlsx.writeFile(importReviewFiles[width]);
+    }
     const navigationSource=process.argv.includes('--browser-menus')?await readFile('src/lib/navigation.js','utf8'):'';
     const menuRoutes=navigationSource?[...new Set([...navigationSource.matchAll(/to:'([^']+)'/g)].map(match=>match[1]).concat('/tai-lieu','/ho-so'))]:null;
-    const result=spawnSync('python',['scripts/verify-governance-browser.py'],{input:JSON.stringify({base,cookie:actors.admin.cookie,...(process.argv.includes('--browser-feedback')?{routes:['/phong-ban','/dinh-bien'],feedback:true}:{}),...(menuRoutes?{routes:menuRoutes}:{}),...(process.argv.includes('--browser-duties')?{routes:['/chuc-danh']}:{}) ,...(process.argv.includes('--browser-chart')?{routes:['/so-do-to-chuc/phong-ban']}:{}),...(process.argv.includes('--browser-tasks')?{routes:['/timeline','/bao-cao','/kpi','/nhan-vien','/dinh-bien','/nhat-ky']}:{})}),encoding:'utf8',timeout:240000,windowsHide:true});
+    const result=spawnSync('python',['scripts/verify-governance-browser.py'],{input:JSON.stringify({base,cookie:actors.admin.cookie,importFile,importReviewFiles,...(process.argv.includes('--browser-feedback')?{routes:['/phong-ban','/dinh-bien'],feedback:true}:{}),...(menuRoutes?{routes:menuRoutes}:{}),...(process.argv.includes('--browser-duties')?{routes:['/chuc-danh']}:{}) ,...(process.argv.includes('--browser-chart')?{routes:['/so-do-to-chuc/phong-ban']}:{}),...(process.argv.includes('--browser-tasks')?{routes:['/timeline','/bao-cao','/kpi','/nhan-vien','/tai-khoan','/ho-so','/dinh-bien','/nhat-ky']}:{})}),encoding:'utf8',timeout:240000,windowsHide:true});
     if(result.stdout)process.stdout.write(result.stdout);if(result.stderr)process.stderr.write(result.stderr);assert.equal(result.status,0,'Browser verification failed');
   }
 }finally{

@@ -54,8 +54,8 @@ function Content({ mode }){
   }
   const ids=new Set(people.map(person=>person.id));const childrenByParent=new Map();const roots=[];
   for(const person of people){if(person.manager_id&&ids.has(person.manager_id)&&person.manager_id!==person.id){const children=childrenByParent.get(person.manager_id)||[];children.push(person);childrenByParent.set(person.manager_id,children);}else roots.push(person);}
-  return <Layout title={title} subtitle={mode==='department'?'Chọn phòng ban để xem cơ cấu nhân sự và tuyến quản lý trong phòng.':'Chọn ô để xem thông tin; thu/mở từng nhánh trong phạm vi được cấp quyền.'} actions={can('employees','manage')&&<Link href="/nhan-vien" className="ui-button">Cập nhật nhân sự</Link>}>
-    {mode==='company'&&<div className="ui-card mb-4 flex flex-wrap items-center justify-between gap-3 p-4"><p className="text-sm">Xem sơ đồ Phòng Kế toán và Phòng Tài chính đã nhập từ Word.</p><Link href="/so-do-to-chuc/phong-ban" className="btn-primary">Mở sơ đồ phòng ban</Link></div>}
+  return <Layout title={title} actions={can('employees','manage')&&<Link href="/nhan-vien" className="ui-button">Cập nhật nhân sự</Link>}>
+    {mode==='company'&&<div className="ui-card mb-4 flex flex-wrap items-center justify-between gap-3 p-4"><Link href="/so-do-to-chuc/phong-ban" className="btn-primary">Mở sơ đồ phòng ban</Link></div>}
     <div className="ui-card mb-4 grid gap-3 p-4 sm:grid-cols-2">
       <label className="text-sm"><span className="mb-1 block text-xs font-medium text-slate">Tìm kiếm</span><input aria-label="Tìm nhân sự hoặc chức danh" placeholder="Tìm người hoặc chức danh..." value={search} onChange={e=>setSearch(e.target.value)} className="ui-field"/></label>
       {mode!=='company'&&<label className="text-sm"><span className="mb-1 block text-xs font-medium text-slate">Phòng ban</span><select aria-label="Phòng ban" value={selectedDepartment} onChange={e=>setDepartment(e.target.value)} className="ui-field" disabled={!departments.length}>

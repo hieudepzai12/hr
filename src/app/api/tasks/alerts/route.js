@@ -18,7 +18,7 @@ export const GET = withAuth(async (req, ctx, user) => {
     where += ` AND (t.assignee_id=$1 OR EXISTS
       (SELECT 1 FROM task_collaborators tc WHERE tc.task_id=t.id AND tc.employee_id=$1))`;
   }
-  const { rows } = await query(`SELECT t.id, t.title, t.due_date, t.status, t.progress,
+  const { rows } = await query(`SELECT t.id, t.title, t.due_date, t.status, t.progress, t.progress_text,
     t.planned_progress_date, t.planned_progress, t.deleted_at FROM tasks t WHERE ${where}
     ORDER BY t.due_date ASC NULLS LAST LIMIT 300`, params);
   const alerts = rows.map((task) => ({ ...task, alert: deadlineAlert(task) })).filter((task) =>

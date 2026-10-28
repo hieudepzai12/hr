@@ -10,6 +10,7 @@ export function validateTaskInput(body, { partial = false } = {}) {
   if (body.description !== undefined && body.description !== null && (typeof body.description !== 'string' || body.description.length > 10000)) return 'Mô tả không hợp lệ';
   if (body.status !== undefined && !STATUSES.has(body.status)) return 'Trạng thái không hợp lệ';
   if (body.priority !== undefined && !PRIORITIES.has(body.priority)) return 'Độ ưu tiên không hợp lệ';
+  if (body.progress_text !== undefined && (typeof body.progress_text !== 'string' || body.progress_text.length > 10000)) return 'Nội dung tiến độ không hợp lệ (tối đa 10.000 ký tự)';
   if (body.progress !== undefined && (!Number.isInteger(Number(body.progress)) || Number(body.progress) < 0 || Number(body.progress) > 100)) return 'Tiến độ không hợp lệ';
   if (body.assignee_id !== undefined && body.assignee_id !== null && body.assignee_id !== '' && (!Number.isSafeInteger(Number(body.assignee_id)) || Number(body.assignee_id) <= 0)) return 'Nhân viên được giao không hợp lệ';
   if (!validDate(body.start_date) || !validDate(body.due_date) || !validDate(body.expected_response_date) || !validDate(body.planned_progress_date)) return 'Ngày công việc không hợp lệ';

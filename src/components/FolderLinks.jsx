@@ -16,7 +16,7 @@ export default function FolderLinks({ folder, onChanged }) {
   const [error,setError]=useFeedback('error');
   const [form,setForm]=useState(null);
   const [saving,setSaving]=useState(false);
-  const [notice,setNotice]=useFeedback('success');
+  const [,setNotice]=useFeedback('success');
   const canAdd=!folder.deleted_at&&scopeAllows(user,'documents','create',{ownerId:folder.owner_id,departmentId:folder.department_id});
   const load=useCallback(async()=>{
     const {data}=await api.get('/governance/documents',{params:{folder_id:folder.id,page,pageSize}});
@@ -39,7 +39,7 @@ export default function FolderLinks({ folder, onChanged }) {
   };
   return <section className="mt-5 min-w-0 border-t border-line pt-4">
     <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold">Link đính kèm</h3>{canAdd&&!form&&<button type="button" onClick={()=>setForm({name:'',url:'',instructions:''})} className="ui-button ui-button-secondary"><Plus size={15}/>Thêm link</button>}</div>
-    <p className="mt-1 text-xs text-slate">Link thư mục, Google Drive, SharePoint hoặc tài liệu HTTPS. Trên sơ đồ hiển thị tối đa 5 link mỗi thư mục; xem toàn bộ tại đây.</p>
+
     {error&&<p role="alert" className="ui-notice mt-3">{error}</p>}
     {form&&<form onSubmit={save} className="mt-3 space-y-3 rounded-lg border border-line bg-paper p-4">
       <label className="block text-sm font-medium">Tên link <span className="required-mark">*</span><input className="ui-field mt-1" required maxLength={2000} value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></label>

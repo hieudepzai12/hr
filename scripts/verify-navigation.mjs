@@ -4,6 +4,10 @@ import { NAV_GROUPS, visibleNavigation, flattenNavigation, navigationActive } fr
 import { defaultPermissions } from '../src/lib/permissions.js';
 
 const entries = flattenNavigation(NAV_GROUPS.flatMap(group => group.items));
+assert.ok(NAV_GROUPS.find(group=>group.items.some(item=>item.to==='/phan-quyen')).items.some(item=>item.to==='/tai-khoan'));
+const work = NAV_GROUPS.find(group=>group.defaultOpen);
+assert.deepEqual(work.items.slice(0,2).map(item=>item.to),['/timeline','/bao-cao']);
+assert.ok(NAV_GROUPS.indexOf(work)<NAV_GROUPS.findIndex(group=>group.items.some(item=>item.to==='/nhan-vien')));
 assert.equal(new Set(entries.map(item => item.to)).size, entries.length);
 for (const entry of entries) await access(`src/app${entry.to === '/' ? '' : entry.to}/page.js`);
 for (const role of ['admin','director','hr','manager','employee','custom_test']) {

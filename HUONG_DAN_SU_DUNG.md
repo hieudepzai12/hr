@@ -58,7 +58,7 @@ Mở **Báo cáo** và chọn **Báo cáo của tôi**, **Báo cáo phòng ban**
 
 ### Lập và gửi báo cáo
 
-1. Chọn **Lập báo cáo**.
+1. Mở menu **Báo cáo công việc → Lập báo cáo**. Chọn công việc mình phụ trách/phối hợp, nhập **Tiến độ, Vướng mắc, Giải pháp** và lưu cập nhật công việc, sau đó lưu hoặc gửi báo cáo. Ba cột này cũng hiển thị trong danh sách báo cáo theo nội dung tại thời điểm lưu báo cáo. Màn hình Danh sách công việc không có nút báo cáo riêng.
 2. Nhập **Tiêu đề**; chọn loại báo cáo, khách hàng và khoảng thời gian nếu có.
 3. Nhập nội dung và tích chọn các **Công việc trong kỳ**. Danh sách chọn hiển thị công việc mà bạn là người phụ trách hoặc người phối hợp.
 4. Chọn **Lưu nháp** nếu còn chỉnh sửa, hoặc **Gửi báo cáo** khi hoàn tất.
@@ -226,19 +226,19 @@ Hiện trang Báo cáo **chưa có nút in báo cáo riêng**. Phản hồi qu�
 
 ## M. Quản lý nhân viên và mật khẩu
 
-1. Mở **Nhân viên**. Tìm theo tên/email; chọn **Xem thêm** nếu còn người trong danh sách. Trên điện thoại, mỗi nhân viên hiển thị theo thẻ dọc; trên máy tính là bảng.
-2. Nếu có quyền quản lý, chọn **Thêm nhân viên**. Điền họ tên, email, mật khẩu ban đầu; bổ sung chức vụ, vai trò, phòng ban, quản lý trực tiếp, số điện thoại và ngày vào làm. Chọn **Thêm nhân viên** để lưu.
+1. Mở **Nhân viên**. Tìm theo tên/email, lọc phòng ban và chuyển trang bằng thanh phân trang. Trên điện thoại, mỗi nhân viên hiển thị theo thẻ dọc; trên máy tính là bảng.
+2. Để tạo mới, mở **Quản trị hệ thống → Tài khoản → Tạo tài khoản** nếu có quyền quản lý. Điền họ tên, email, mật khẩu ban đầu; bổ sung chức vụ, vai trò, phòng ban, quản lý trực tiếp, số điện thoại và ngày vào làm. Chọn **Tạo tài khoản** để lưu. Hệ thống tạo đồng thời tài khoản và hồ sơ nhân viên, không cần tạo lại ở Nhân viên.
 3. Để sửa, chọn biểu tượng bút chì ở nhân viên, chỉnh thông tin rồi chọn **Lưu thay đổi**.
-4. Để vô hiệu hóa, chọn biểu tượng vô hiệu hóa và xác nhận. Tài khoản Admin được bảo vệ khỏi thao tác này trên danh sách.
-5. Để đổi mật khẩu của mình, tìm tài khoản của bạn và chọn biểu tượng chìa khóa. Nhập mật khẩu hiện tại nếu form yêu cầu, nhập mật khẩu mới và xác nhận, rồi chọn **Lưu mật khẩu**.
-6. Admin đặt lại mật khẩu cho người khác bằng biểu tượng chìa khóa tại nhân viên đó. Mật khẩu mới tối thiểu **8 ký tự**. Không gửi mật khẩu qua kênh không an toàn.
+4. Để vô hiệu hóa, mở **Quản trị hệ thống → Tài khoản**, chọn **Ngừng hoạt động** tại tài khoản cần khóa và xác nhận. Tài khoản Admin được bảo vệ khỏi thao tác này.
+5. Để đổi mật khẩu của mình, bấm avatar ở góc phải → **Đổi mật khẩu**. Nhập mật khẩu hiện tại nếu form yêu cầu, nhập mật khẩu mới và xác nhận, rồi chọn **Lưu mật khẩu**. Sau khi đổi, đăng nhập lại bằng mật khẩu mới.
+6. Admin chọn **Đặt lại mật khẩu** tại người cần đổi trong **Tài khoản**. Để đổi mật khẩu của chính Admin, chọn **Đổi mật khẩu Admin** tại dòng của mình hoặc dùng menu avatar. Mật khẩu mới tối thiểu **8 ký tự**. Không gửi mật khẩu qua kênh không an toàn. Chặn ngừng hoạt động Admin chỉ bảo vệ quyền quản trị, không khóa việc đổi mật khẩu.
 
 ## N. Hồ sơ và ảnh đại diện
 
-1. Chọn ảnh đại diện ở góc trên bên phải để mở **Hồ sơ của tôi**.
+1. Bấm avatar góc trên bên phải → **Thông tin cá nhân** để xem thông tin và hồ sơ nhân sự của chính mình trên cùng một trang. Không còn tab hồ sơ nhân sự riêng. Nếu được cấp quyền xem người khác, vào **Nhân viên**, bấm trực tiếp tên người cần xem để mở trang thông tin. Chọn **Về danh sách nhân viên** để quay lại.
 2. Xem thông tin nhân viên, phòng ban, vai trò và trạng thái.
 3. Chọn biểu tượng máy ảnh hoặc **Tải ảnh mới** để tải PNG, JPG, WEBP hoặc GIF tối đa **3 MB**.
-4. Chọn **Xoá ảnh** nếu muốn bỏ ảnh hiện tại. Đổi mật khẩu bằng thao tác chìa khóa trong màn hình **Nhân viên**.
+4. Chọn **Xoá ảnh** nếu muốn bỏ ảnh hiện tại. Đổi mật khẩu bằng lựa chọn **Đổi mật khẩu** trong menu avatar góc phải.
 
 ## O. Phòng ban và sơ đồ tổ chức
 

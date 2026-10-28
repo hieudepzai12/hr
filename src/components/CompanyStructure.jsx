@@ -23,7 +23,7 @@ function Content(){
  const departments=(data?.departments||[]).filter(d=>!['ban giam doc','ban giam doc cong ty'].includes(d.name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').toLowerCase().trim()));
  const employees=data?.employees||[];
  const directors=employees.filter(isCompanyLeader);
- return <Layout title="Cơ cấu công ty" subtitle="Cơ cấu phòng ban và định biên đã duyệt theo tháng. Không hiển thị tên cá nhân." actions={can('staffing')&&<Link href="/dinh-bien" className="ui-button ui-button-primary">Định biên nhân sự</Link>}>
+ return <Layout title="Cơ cấu công ty" actions={can('staffing')&&<Link href="/dinh-bien" className="ui-button ui-button-primary">Định biên nhân sự</Link>}>
   <div className="mb-4 max-w-xs"><MonthInput label="Tháng định biên" value={month} required onChange={value=>{if(value!==month){setData(null);setError('');setMonth(value);}}}/></div>
   {!month?<p className="ui-card ui-empty">Chọn đủ tháng và năm để xem cơ cấu.</p>:error?<p role="alert" className="ui-notice">{error}</p>:!data?<p role="status" className="ui-card ui-empty">Đang tải cơ cấu công ty...</p>:<section className="ui-card min-w-0 p-4 sm:p-6" aria-label="Sơ đồ cơ cấu công ty">
    <div className="mx-auto max-w-56 rounded-xl border border-[#14243d] bg-[#14243d] p-4 text-center font-semibold text-white">{directors.length?[...new Set(directors.flatMap(companyLeadershipTitles))].join(' · '):'OTIS Minh Châu'}</div>
@@ -37,8 +37,8 @@ function Content(){
     <div className="rounded-lg border border-line bg-slate-50 p-3"><strong className="text-xl text-[#14243d]">{target??'—'}</strong><p className="mt-1 text-xs font-medium text-slate">Định biên đã duyệt</p><p className="mt-2 text-xs text-slate">Hiện có: {count.current}{target!=null&&` · Còn thiếu: ${Math.max(0,target-count.current)}`}</p>{target!=null&&count.current>target&&<p className="mt-2 text-xs text-amber-800">Vượt định biên: {count.current-target} người</p>}{target==null&&<p className="mt-2 text-xs text-slate">{data.staffing==null?'Chưa có quyền xem định biên':'Chưa có định biên đã duyệt trong tháng này'}</p>}</div>
     {structure.unresolved>0&&<p className="mt-2 text-xs text-amber-800">Có quan hệ quản lý cần kiểm tra.</p>}
    </article>;})}</div>:<p className="ui-empty">Chưa có phòng ban trong phạm vi được xem.</p>}
-   <p className="mt-5 text-sm text-slate">Định biên là tổng số người của phòng ban đã được duyệt trong tháng đang chọn, gồm người phụ trách và nhân viên. Còn thiếu = định biên − nhân sự hiện có (tối thiểu 0). Không cộng thêm nhu cầu tuyển dụng vào định biên. Cập nhật tại Định biên nhân sự.</p>
-   <p className="mt-2 text-xs text-slate">Số hiện có gồm nhân sự thuộc phòng và người kiêm nhiệm phụ trách phòng. Mỗi người chỉ tính một lần trong mỗi phòng, dù xuất hiện ở nhiều ô; khi thống kê toàn công ty cần đếm người duy nhất, không cộng các phòng có người kiêm nhiệm.</p>
+
+
    {(!data.companyWide||departments.length!==5)&&<p className="mt-2 text-sm text-slate">Đang hiển thị {departments.length} phòng ban theo danh mục và quyền truy cập hiện tại.</p>}
   </section>}
  </Layout>;

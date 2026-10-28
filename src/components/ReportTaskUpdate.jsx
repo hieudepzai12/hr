@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import api from '@/lib/api';
 import { notify } from '@/lib/feedback';
 
-const fields = [['result', 'Kết quả đã làm'], ['next_step', 'Bước tiếp theo'], ['blockers', 'Vướng mắc'], ['solution', 'Giải pháp']];
+const fields = [['blockers', 'Vướng mắc'], ['solution', 'Giải pháp'], ['result', 'Kết quả đã làm'], ['next_step', 'Bước tiếp theo']];
 
 export default function ReportTaskUpdate({ task, employeeId, canUpdate, disabled, onStateChange }) {
   const [form, setForm] = useState(null);
@@ -21,7 +21,7 @@ export default function ReportTaskUpdate({ task, employeeId, canUpdate, disabled
       const own = data.updates?.find((item) => Number(item.employee_id) === Number(employeeId));
       const primary = Number(data.assignee_id) === Number(employeeId);
       setPrimary(primary);
-      setForm({ progress: own?.progress ?? (primary ? data.progress : 0) ?? 0,
+      setForm({ progress_text: own?.progress_text ?? (primary ? data.progress_text : '') ?? '',
         result: own?.result ?? (primary ? data.completed_result : '') ?? '',
         next_step: own?.next_step ?? (primary ? data.next_step : '') ?? '',
         blockers: own?.blockers ?? (primary ? data.blockers : '') ?? '',
@@ -50,7 +50,7 @@ export default function ReportTaskUpdate({ task, employeeId, canUpdate, disabled
     {!form ? <p role="status" className="text-sm">Đang tải phần việc…</p> : <>
       {locked && <p className="mt-2 text-sm text-slate">Đã nghiệm thu — nội dung công việc đang khóa.</p>}
       <fieldset disabled={locked || saving || disabled || !canUpdate} className="mt-3 grid gap-3 sm:grid-cols-2">
-        <label className="text-sm sm:col-span-2">Tiến độ (%)<input type="number" min="0" max="100" step="1" required value={form.progress} onChange={(e) => change('progress', Number(e.target.value))} className="ui-field mt-1" /></label>
+        <label className="text-sm sm:col-span-2">Tiến độ<textarea rows={3} maxLength={10000} value={form.progress_text} onChange={(e) => change('progress_text', e.target.value)} placeholder="Nhập nội dung tiến độ thực hiện…" className="ui-field mt-1" /></label>
         {fields.map(([key, label]) => <label key={key} className="text-sm">{label}<textarea rows={3} maxLength={10000} value={form[key]} onChange={(e) => change(key, e.target.value)} className="ui-field mt-1" /></label>)}
         {primary && <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" checked={form.submit_for_review} onChange={(e) => change('submit_for_review', e.target.checked)} /> Báo hoàn tất và gửi quản lý nghiệm thu</label>}
       </fieldset>

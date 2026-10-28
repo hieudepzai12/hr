@@ -207,9 +207,7 @@ async function prepareFields(client, resource, body, user, before, intent) {
     (Number(before.department_id)!==Number(fields.department_id)||resource==='folders'&&Number(before.owner_id)!==Number(fields.owner_id))){
     const links=resource==='folders'
       ? 'SELECT 1 FROM document_folders WHERE parent_id=$1 AND deleted_at IS NULL UNION ALL SELECT 1 FROM internal_documents WHERE folder_id=$1 AND deleted_at IS NULL LIMIT 1'
-      :resource==='projects'
-        ? 'SELECT 1 FROM tasks WHERE project_id=$1 AND deleted_at IS NULL UNION ALL SELECT 1 FROM project_members WHERE project_id=$1 AND deleted_at IS NULL UNION ALL SELECT 1 FROM position_assignments WHERE project_id=$1 AND deleted_at IS NULL LIMIT 1'
-        : 'SELECT 1 FROM position_assignments WHERE position_id=$1 AND deleted_at IS NULL UNION ALL SELECT 1 FROM staffing_plans WHERE position_id=$1 AND deleted_at IS NULL UNION ALL SELECT 1 FROM salary_budgets WHERE position_id=$1 AND deleted_at IS NULL UNION ALL SELECT 1 FROM recruitment_requests WHERE position_id=$1 AND deleted_at IS NULL LIMIT 1';
+      : 'SELECT 1 FROM position_assignments WHERE position_id=$1 AND deleted_at IS NULL UNION ALL SELECT 1 FROM staffing_plans WHERE position_id=$1 AND deleted_at IS NULL UNION ALL SELECT 1 FROM salary_budgets WHERE position_id=$1 AND deleted_at IS NULL UNION ALL SELECT 1 FROM recruitment_requests WHERE position_id=$1 AND deleted_at IS NULL LIMIT 1';
     if((await client.query(links,[before.id])).rowCount)throw new GovernanceError('Dữ liệu còn liên kết. Cần xử lý các liên kết trước khi đổi đơn vị hoặc chủ quản.',409);
   }
   if (rows.parent_id) {

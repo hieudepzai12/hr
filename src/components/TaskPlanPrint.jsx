@@ -1,4 +1,5 @@
 'use client';
+import { progressText } from '@/lib/task-progress';
 
 import Modal from './Modal';
 import { PriorityBadge, TaskStatusBadge } from './Badges';
@@ -24,7 +25,7 @@ export default function TaskPlanPrint({ payload, onClose }) {
           <td className="align-top"><strong className="block">#{task.id} {task.title}</strong><span className="mt-1 block"><PriorityBadge priority={task.priority} /></span>{task.description && <span className="mt-1 block whitespace-pre-wrap text-xs text-slate">{task.description}</span>}{task.expected_outcome && <span className="mt-1 block whitespace-pre-wrap text-xs">Đầu ra: {task.expected_outcome}</span>}</td>
           <td className="align-top"><strong>{task.assignee_name || '—'}</strong>{task.collaborator_names && <span className="mt-1 block text-xs text-slate">Phối hợp: {task.collaborator_names}</span>}</td>
           <td className="align-top">{task.department_name || '—'}{task.customer_name && <span className="mt-1 block text-xs text-slate">{task.customer_name}</span>}</td>
-          <td className="align-top"><strong>{task.progress ?? 0}%</strong><div className="progress-track mt-1"><div className="progress-fill" style={{ width: `${task.progress || 0}%` }} /></div><span className="mt-1 block"><TaskStatusBadge status={task.status} /></span></td>
+          <td className="align-top"><p className="whitespace-pre-wrap break-words">{progressText(task)}</p><span className="mt-1 block"><TaskStatusBadge status={task.status} /></span></td>
           <td className="whitespace-pre-wrap align-top">{task.blockers || '—'}</td>
           <td className="whitespace-pre-wrap align-top">{task.proposed_solution || '—'}</td>
           <td className="whitespace-pre-wrap align-top">{task.leader_opinion || '—'}</td>

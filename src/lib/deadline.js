@@ -13,7 +13,7 @@ export function deadlineAlert(task, now = new Date()) {
   if (days < 0) return { kind: 'overdue', label: `Quá hạn ${-days} ngày`, days };
   if (days === 0) return { kind: 'today', label: 'Đến hạn hôm nay', days };
   if (days === 1 || days === 3) return { kind: 'upcoming', label: `Còn ${days} ngày`, days };
-  if (task.planned_progress_date && task.planned_progress != null && task.planned_progress_date <= today && Number(task.progress) < Number(task.planned_progress)) {
+  if (!task.progress_text?.trim() && task.planned_progress_date && task.planned_progress != null && task.planned_progress_date <= today && Number(task.progress) < Number(task.planned_progress)) {
     return { kind: 'behind', label: `Chậm mốc tiến độ ${task.planned_progress}%`, days };
   }
   return null;

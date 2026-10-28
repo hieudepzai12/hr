@@ -17,6 +17,6 @@ export default function JobTitlePicker({value,onChange,options,departments=[]}){
    <label htmlFor={`${prefix}-department`} className="min-w-0 text-xs font-medium text-slate">Phòng kiêm nhiệm (nếu có)<select id={`${prefix}-department`} aria-label="Phòng của chức vụ mới" className="ui-field mt-1.5 bg-white" value={department} onChange={e=>setDepartment(e.target.value)}><option value="">Không chỉ định phòng</option>{departments.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
   </div><div className="mt-3 flex justify-end"><button type="button" className="ui-button bg-white" disabled={!custom.trim()} onClick={addCustom}><Plus size={15}/>Thêm chức vụ</button></div></div>
   {error&&<p role="alert" className="text-xs text-clay">{error}</p>}
-  <p className="text-xs text-slate">Chức vụ đã chọn được lưu khi bấm Lưu thay đổi.</p>
+
  </div>;
 }

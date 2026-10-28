@@ -48,7 +48,7 @@ export default function LoginPage() {
 
         <div className="p-10">
           <h1 className="font-display text-2xl font-semibold text-ink mb-1">Đăng nhập</h1>
-          <p className="text-sm text-slate mb-6">Nhập thông tin tài khoản của bạn để tiếp tục</p>
+
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>

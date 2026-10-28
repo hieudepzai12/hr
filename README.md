@@ -208,3 +208,8 @@ Hai phần chính sách và đề xuất thưởng hiển thị trên cùng mộ
 Cần migration **013** trước khi dùng code này. Migration chỉ bổ sung `bonus_awards.award_scope`, cho phép `employee_id` trống với thưởng phòng, thêm ràng buộc và index; không xóa hay đổi số tiền cũ. Chạy `npm run migrate` với database local đã cấu hình. Với Neon, chỉ sau khi được xác nhận: `npm run migrate -- --allow-remote`. Lưu ý `.env.local` hiện trỏ Neon; không chạy lệnh trên khi chưa chọn đúng database.
 
 Rollback: giữ schema bổ sung và dữ liệu; không gán nhân sự giả cho thưởng phòng. Nếu cần quay về code cũ, tạm dừng phân hệ thưởng vì code cũ chưa hiểu khoản thưởng không có nhân sự. Không đặt lại NOT NULL khi đã có thưởng phòng.
+### Tiến độ công việc dạng nội dung (migration 014)
+
+Tiến độ được nhập bằng chữ tại Báo cáo công việc → phần việc đã chọn → Tiến độ. Nội dung lưu vào `tasks.progress_text`, `task_updates.progress_text` và snapshot của báo cáo. Dữ liệu phần trăm cũ được giữ nguyên để tương thích; nội dung chữ không tự quy đổi thành phần trăm hoặc tự nghiệm thu. Cảnh báo quá hạn vẫn theo ngày hạn; không so sánh nội dung chữ với mốc phần trăm dự kiến.
+
+Áp dụng trên database local đã chọn: `npm run migrate`. Với Neon, chỉ sau khi được xác nhận thay đổi schema: `npm run migrate -- --allow-remote`. Kiểm tra đích kết nối trước khi chạy; `.env.local` hiện trỏ Neon. Migration chỉ thêm hai cột, không xóa dữ liệu. Rollback code có thể giữ hai cột này; không drop cột vì sẽ mất nội dung đã nhập. Báo cáo/phiên bản đã lưu trước migration không bị viết lại.

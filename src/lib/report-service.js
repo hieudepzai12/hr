@@ -25,12 +25,12 @@ export async function replaceReportItems(client, reportId, taskIds, userId) {
   if (!ids.length) return;
   const { rows: tasks } = await client.query(`SELECT t.*, e.full_name AS employee_name,
       c.name AS customer_name, c.code AS customer_code,
-      own.progress AS own_progress, own.result AS own_result, own.next_step AS own_next_step,
+      own.progress AS own_progress, own.progress_text AS own_progress_text, own.result AS own_result, own.next_step AS own_next_step,
       own.blockers AS own_blockers, own.solution AS own_solution
       FROM tasks t LEFT JOIN employees e ON e.id=$2
       LEFT JOIN customers c ON c.id=t.customer_id
-      LEFT JOIN LATERAL (SELECT progress, result, next_step, blockers, solution
-        FROM task_updates WHERE task_id=t.id AND employee_id=$2 ORDER BY created_at DESC LIMIT 1) own ON TRUE
+      LEFT JOIN LATERAL (SELECT progress, progress_text, result, next_step, blockers, solution
+        FROM task_updates WHERE task_id=t.id AND employee_id=$2 ORDER BY created_at DESC, id DESC LIMIT 1) own ON TRUE
       WHERE t.id=ANY($1::int[]) AND t.deleted_at IS NULL AND
         (t.assignee_id=$2 OR EXISTS (SELECT 1 FROM task_collaborators tc WHERE tc.task_id=t.id AND tc.employee_id=$2))`,
     [ids, userId]);
@@ -47,6 +47,7 @@ export async function replaceReportItems(client, reportId, taskIds, userId) {
       customer_id: task.customer_id, customer_name: task.customer_name, customer_code: task.customer_code,
       department_id: task.department_id, due_date: task.due_date, data_period: task.data_period,
       status: task.status, progress: task.own_progress ?? task.progress,
+      progress_text: task.own_progress_text ?? (Number(task.assignee_id) === Number(userId) ? task.progress_text : ''),
       result: task.own_result ?? task.completed_result, next_step: task.own_next_step ?? task.next_step,
       blockers: task.own_blockers ?? task.blockers, solution: task.own_solution ?? task.proposed_solution,
     };

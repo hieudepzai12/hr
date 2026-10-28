@@ -63,11 +63,16 @@ export const POST = withAuth(async (req, ctx, user) => {
   const assigneeId = Number(body.assignee_id || user.id);
   const assignee = await queryOne("SELECT id, department_id FROM employees WHERE id=$1 AND status='active'", [assigneeId]);
   if (!assignee) return NextResponse.json({ error: 'Người phụ trách không hợp lệ' }, { status: 400 });
-  const departmentId = Number(body.department_id || assignee.department_id || user.department_id);
-  if (!Number.isSafeInteger(departmentId) || departmentId <= 0) {
+  const selectedDepartment = body.department_id || assignee.department_id || user.department_id;
+  const departmentId = selectedDepartment == null || selectedDepartment === '' ? null : Number(selectedDepartment);
+  if ((departmentId === null && user.role !== 'admin') || (departmentId !== null &&
+    (!Number.isSafeInteger(departmentId) || departmentId <= 0 || departmentId > 2147483647))) {
     return NextResponse.json({ error: 'Cần chọn phòng ban hợp lệ' }, { status: 400 });
   }
   if (!scopeAllows(user, 'tasks', 'create', { ownerId: assigneeId, departmentId })) return forbidden();
+  if (departmentId !== null && !await queryOne('SELECT 1 FROM departments WHERE id=$1', [departmentId])) {
+    return NextResponse.json({ error: 'Phòng ban không tồn tại. Vui lòng chọn lại phòng ban.' }, { status: 400 });
+  }
   const projectError = await validateTaskProject(user,body.project_id,departmentId,body.customer_id);
   if(projectError)return NextResponse.json({error:projectError},{status:400});
   if (scopeFor(user, 'tasks', 'create') === 'department' && Number(assignee.department_id) !== departmentId) return forbidden();
@@ -87,12 +92,12 @@ export const POST = withAuth(async (req, ctx, user) => {
   const task = await transaction(async (client) => {
     const { rows } = await client.query(`INSERT INTO tasks
       (title, description, assignee_id, created_by, status, priority, start_date, due_date, progress,
-      customer_id, department_id, business_group, data_period, expected_outcome, planned_progress_date, planned_progress, project_id)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
+      customer_id, department_id, business_group, data_period, expected_outcome, planned_progress_date, planned_progress, project_id, progress_text)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *`,
     [body.title.trim(), body.description || null, assigneeId, user.id, body.status || 'todo', body.priority || 'medium',
       body.start_date || null, body.due_date || null, Number(body.progress || 0), body.customer_id || null, departmentId || null,
       body.business_group || null, body.data_period || null, body.expected_outcome || null,
-      body.planned_progress_date || null, body.planned_progress === '' ? null : body.planned_progress ?? null, body.project_id || null]);
+      body.planned_progress_date || null, body.planned_progress === '' ? null : body.planned_progress ?? null, body.project_id || null, body.progress_text || '']);
     for (const employeeId of collaborators) {
       await client.query('INSERT INTO task_collaborators (task_id, employee_id) VALUES ($1,$2)', [rows[0].id, employeeId]);
     }

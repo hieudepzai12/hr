@@ -18,13 +18,22 @@ export const GET = withAuth(async (req, ctx, user) => {
   let sql = `SELECT ${pagination ? `r.id, r.title, LEFT(r.content, 240) AS excerpt, r.type, r.employee_id,
     r.department_id, r.customer_id, r.status, r.feedback, r.period_start, r.period_end, r.created_at,
     r.updated_at, r.submitted_at, r.deleted_at, r.version` : 'r.*'},
-    e.full_name AS employee_name, d.name AS department_name, c.name AS customer_name
+    e.full_name AS employee_name, d.name AS department_name, c.name AS customer_name,
+    COALESCE((SELECT jsonb_agg(jsonb_build_object('task_id',ri.task_id,
+      'progress_text',ri.snapshot->>'progress_text','progress',ri.snapshot->'progress','due_date',ri.snapshot->>'due_date',
+      'blockers',ri.snapshot->>'blockers','solution',ri.snapshot->>'solution') ORDER BY ri.id)
+      FROM report_items ri WHERE ri.report_id=r.id),'[]'::jsonb) AS task_summaries
     FROM reports r JOIN employees e ON e.id=r.employee_id
     LEFT JOIN departments d ON d.id=COALESCE(r.department_id,e.department_id)
     LEFT JOIN customers c ON c.id=r.customer_id
     WHERE r.deleted_at IS ${deleted ? 'NOT NULL' : 'NULL'}`;
   if (scope === 'self') { params.push(user.id); sql += ` AND r.employee_id=$${params.length}`; }
   if (scope === 'department') { params.push(user.department_id ?? -1); sql += ` AND COALESCE(r.department_id,e.department_id)=$${params.length}`; }
+  const taskId = searchParams.get('task_id');
+  if (taskId) {
+    if (!/^[1-9]\d*$/.test(taskId) || Number(taskId)>2147483647) return NextResponse.json({error:'Mã công việc không hợp lệ'},{status:400});
+    params.push(Number(taskId)); sql += ` AND EXISTS (SELECT 1 FROM report_items ri WHERE ri.report_id=r.id AND ri.task_id=$${params.length})`;
+  }
   for (const [key, column] of Object.entries({ employee_id: 'r.employee_id', department_id: 'COALESCE(r.department_id,e.department_id)', customer_id: 'r.customer_id', status: 'r.status', type: 'r.type' })) {
     const value = searchParams.get(key);
     if (value) { params.push(value); sql += ` AND ${column}=$${params.length}`; }
