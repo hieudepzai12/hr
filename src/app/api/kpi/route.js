@@ -5,12 +5,8 @@ import { parsePagination, pagedResult, appendPagination } from '@/lib/pagination
 import { canViewTask } from '@/lib/task-access';
 import { canReport } from '@/lib/report-service';
 
-function computeRating(score) {
-  if (score >= 9) return 'Xuất sắc';
-  if (score >= 7.5) return 'Tốt';
-  if (score >= 6) return 'Đạt';
-  return 'Cần cải thiện';
-}
+const RATINGS = ['Không hoàn thành', 'Hoàn thành', 'Hoàn thành tốt'];
+const LEGACY_RATINGS = { 'Xuất sắc': 'Hoàn thành tốt', 'Tốt': 'Hoàn thành tốt', 'Đạt': 'Hoàn thành', 'Cần cải thiện': 'Không hoàn thành' };
 
 export const GET = withAuth(async (req, ctx, user) => {
   const { searchParams } = new URL(req.url);
@@ -19,7 +15,8 @@ export const GET = withAuth(async (req, ctx, user) => {
   const employee_id = searchParams.get('employee_id');
   const period = searchParams.get('period');
 
-  let sql = `SELECT k.*, e.full_name as employee_name, e.avatar_color, e.avatar_path,
+  let sql = `SELECT k.id, k.employee_id, k.period, k.rating, k.comments, k.evaluated_by, k.created_at,
+             e.full_name as employee_name, e.avatar_color, e.avatar_path,
              ev.full_name as evaluator_name,
              COALESCE((SELECT jsonb_agg(jsonb_build_object('task_id',ke.task_id,'report_id',ke.report_id,
                'snapshot',ke.snapshot) ORDER BY ke.id) FROM kpi_evidence ke WHERE ke.evaluation_id=k.id), '[]'::jsonb) AS evidence
@@ -39,38 +36,28 @@ export const GET = withAuth(async (req, ctx, user) => {
   sql = appendPagination(sql + ' ORDER BY k.created_at DESC, k.id DESC', params, pagination);
 
   const { rows } = await query(sql, params);
-  // criteria là cột JSONB — driver pg đã tự parse thành mảng JS, không cần JSON.parse thủ công.
-  return NextResponse.json(pagedResult(rows, pagination));
+  return NextResponse.json(pagedResult(rows.map(row=>({...row,rating:LEGACY_RATINGS[row.rating]||row.rating})), pagination));
 });
 
 export const POST = withAuth(async (req, ctx, user) => {
   const body = await req.json().catch(() => null);
-  const { employee_id, period, criteria, comments } = body || {};
+  const { employee_id, period, rating, comments } = body || {};
   const taskIds = body?.task_ids || [];
   const reportIds = body?.report_ids || [];
-  if (!employee_id || !period || !Array.isArray(criteria) || criteria.length === 0) {
+  if (!employee_id || !period || !rating) {
     return NextResponse.json({ error: 'Thiếu thông tin đánh giá' }, { status: 400 });
   }
   if (!Number.isSafeInteger(Number(employee_id)) || Number(employee_id) <= 0 || Number(employee_id) === user.id ||
-      typeof period !== 'string' || period.length > 40 || criteria.length > 50 ||
+      typeof period !== 'string' || !period.trim() || period.length > 40 || !RATINGS.includes(rating) ||
+      (comments != null && (typeof comments !== 'string' || comments.length > 10000)) ||
       !Array.isArray(taskIds) || !Array.isArray(reportIds) || taskIds.length > 50 || reportIds.length > 50 ||
-      [...taskIds, ...reportIds].some((id) => !Number.isSafeInteger(Number(id)) || Number(id) <= 0) ||
-      criteria.some(c => typeof c?.name !== 'string' || !c.name.trim() || c.name.length > 200 ||
-        !Number.isFinite(Number(c.weight)) || Number(c.weight) <= 0 || Number(c.weight) > 100 ||
-        !Number.isFinite(Number(c.score)) || Number(c.score) < 0 || Number(c.score) > 10)) {
+      [...taskIds, ...reportIds].some((id) => !Number.isSafeInteger(Number(id)) || Number(id) <= 0)) {
     return NextResponse.json({ error: 'Thông tin đánh giá không hợp lệ' }, { status: 400 });
   }
   const target = await queryOne('SELECT role FROM employees WHERE id = $1 AND status = $2', [employee_id, 'active']);
   if (!target || (target.role === 'admin' && user.role !== 'admin')) {
     return NextResponse.json({ error: 'Không thể đánh giá nhân viên này' }, { status: 403 });
   }
-  const totalWeight = criteria.reduce((s, c) => s + Number(c.weight || 0), 0);
-  if (Math.abs(totalWeight - 100) > 0.001) {
-    return NextResponse.json({ error: 'Tổng trọng số phải bằng 100%' }, { status: 400 });
-  }
-  const weightedScore = criteria.reduce((s, c) => s + (Number(c.score || 0) * Number(c.weight || 0)) / 100, 0);
-  const totalScore = totalWeight > 0 ? Math.round((weightedScore * 100 / totalWeight) * 10) / 10 : 0;
-  const rating = computeRating(totalScore);
   const evidence = [];
   for (const id of new Set(taskIds.map(Number))) {
     const task = await queryOne(`SELECT * FROM tasks WHERE id=$1 AND deleted_at IS NULL AND
@@ -92,10 +79,12 @@ export const POST = withAuth(async (req, ctx, user) => {
     } });
   }
   const created = await transaction(async (client) => {
+    // Retain required legacy columns for schema compatibility; they no longer represent an assessment score.
     const { rows } = await client.query(`INSERT INTO kpi_evaluations
       (employee_id, period, criteria, total_score, rating, comments, evaluated_by)
-      VALUES ($1,$2,$3::jsonb,$4,$5,$6,$7) RETURNING *`,
-    [employee_id, period, JSON.stringify(criteria), totalScore, rating, comments || null, user.id]);
+      VALUES ($1,$2,'[]'::jsonb,0,$3,$4,$5)
+      RETURNING id, employee_id, period, rating, comments, evaluated_by, created_at`,
+    [employee_id, period.trim(), rating, comments || null, user.id]);
     for (const item of evidence) await client.query(`INSERT INTO kpi_evidence
       (evaluation_id,task_id,report_id,snapshot) VALUES ($1,$2,$3,$4::jsonb)`,
     [rows[0].id, item.taskId, item.reportId, JSON.stringify(item.snapshot)]);

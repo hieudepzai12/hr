@@ -38,3 +38,5 @@ export const PriorityBadge = ({ priority }) => <Badge map={PRIORITY} value={prio
 export const ReportStatusBadge = ({ status }) => <Badge map={REPORT_STATUS} value={status} />;
 
 export { TASK_STATUS, PRIORITY, REPORT_STATUS };
+
+export const WorkReportStatusBadge = ({status}) => <Badge map={{draft:{label:'Bản nháp',bg:'#e8edf4',fg:'#465a75'},submitted:{label:'Đã gửi',bg:'#dff4e8',fg:'#17623a'}}} value={['submitted','reviewed','approved'].includes(status)?'submitted':'draft'} />;

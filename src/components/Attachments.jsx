@@ -28,6 +28,7 @@ export default function Attachments({ kind, entityId, canManage = true }) {
     setLoading(true);
     api.get(`/${kind}/${entityId}/attachments`)
       .then(({ data }) => setFiles(data))
+      .catch((err) => setError(err.response?.data?.error || 'Không thể tải danh sách file'))
       .finally(() => setLoading(false));
   };
 

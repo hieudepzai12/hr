@@ -3,7 +3,9 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import pg from 'pg';
 import { writeAudit } from '../src/lib/audit.js';
-import { migrateProjectDepartmentOwner } from '../src/lib/migrations/009-project-department-owner.js';
+import {
+  migrateProjectDepartmentOwner
+} from '../src/lib/migrations.js';
 
 if (!process.env.DATABASE_URL) process.loadEnvFile('.env.local');
 const url = new URL(process.env.DATABASE_URL);

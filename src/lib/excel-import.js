@@ -6,6 +6,8 @@ export const normalize = (value) => String(value ?? '').normalize('NFD').replace
 
 const HEADERS = {
   title: ['cong viec', 'noi dung cong viec', 'ten cong viec', 'nhiem vu'],
+  project: ['du an', 'ten du an', 'ma du an'],
+  description: ['mo ta', 'mo ta cong viec'],
   assignee: ['nguoi thuc hien', 'nguoi phu trach', 'phu trach chinh', 'nhan vien'],
   customer: ['khach hang', 'ten khach hang', 'ma khach hang'],
   department: ['phong ban', 'bo phan', 'don vi'],
@@ -23,6 +25,7 @@ function cellValue(cell) {
   const value = cell?.value;
   if (value instanceof Date) return value.toISOString().slice(0, 10);
   if (value && typeof value === 'object') {
+    if (Array.isArray(value.richText)) return value.richText.map(part=>part.text||'').join('').trim();
     if ('result' in value) return String(value.result ?? '');
     if ('text' in value) return String(value.text ?? '');
   }
@@ -55,7 +58,7 @@ function headerMap(values) {
   values.forEach((value, index) => {
     const heading = normalize(value);
     for (const [key, aliases] of Object.entries(HEADERS)) {
-      if (!found[key] && aliases.some((alias) => heading === alias || heading.includes(alias))) found[key] = index + 1;
+      if (!found[key] && aliases.some((alias) => heading === alias || heading.startsWith(`${alias} (`))) found[key] = index + 1;
     }
   });
   return found.title ? found : null;
@@ -74,7 +77,7 @@ export async function parseExcelTasks(buffer) {
       const values = Array.from({ length: Math.min(row.cellCount, 30) }, (_, index) => cellValue(row.getCell(index + 1)));
       if (!columns) { columns = headerMap(values); return; }
       const freshHeader = headerMap(values);
-      if (freshHeader) { columns = freshHeader; previousAssignee = ''; return; }
+      if (freshHeader?.assignee) { columns = freshHeader; previousAssignee = ''; return; }
       const get = (key) => columns[key] ? cellValue(row.getCell(columns[key])) : '';
       const title = get('title');
       const assignee = get('assignee');
@@ -88,7 +91,7 @@ export async function parseExcelTasks(buffer) {
       const completed = kpi.includes('da hoan thanh') || normalize(get('result')).includes('da hoan thanh');
       rows.push({ sheet: sheet.name, row: rowNumber, source_key: `${digest}:${sheet.name}:${rowNumber}`,
         source: values, title, assignee_name: assignee || previousAssignee,
-        customer_name: get('customer'), department_name: get('department'), business_group: get('business_group'),
+        project_name: get('project'), description:get('description'), customer_name: get('customer'), department_name: get('department'), business_group: get('business_group'),
         data_period: get('data_period'), due_date: dateValue(get('due_date')),
         invalid_due_date: Boolean(get('due_date') && !dateValue(get('due_date'))),
         progress: !progressRaw || !Number.isFinite(progressNumber) ? null : fraction ? Math.round(progressNumber * 100) : progressNumber,

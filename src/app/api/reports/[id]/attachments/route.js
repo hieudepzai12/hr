@@ -23,7 +23,6 @@ export const POST = withAuth(async (req, { params }, user) => {
   const report = await loadReport(id);
   if (!report || report.deleted_at) return NextResponse.json({ error: 'Không tìm thấy báo cáo' }, { status: 404 });
   if (!canReport(user, 'edit', report)) return forbidden();
-  if (!['draft', 'reopened', 'rejected'].includes(report.status)) return NextResponse.json({ error: 'Báo cáo đang khóa' }, { status: 409 });
 
   let formData;
   try {

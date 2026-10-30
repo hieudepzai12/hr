@@ -12,11 +12,12 @@ assert.equal(new Set(entries.map(item => item.to)).size, entries.length);
 for (const entry of entries) await access(`src/app${entry.to === '/' ? '' : entry.to}/page.js`);
 for (const role of ['admin','director','hr','manager','employee','custom_test']) {
   const grants = defaultPermissions(role);
-  const can = module => Boolean(grants[module]?.view);
+  const can = (module,action='view') => Boolean(grants[module]?.[action]);
   const visible = visibleNavigation({ role }, can);
   for (const item of flattenNavigation(visible.flatMap(group => group.items))) {
-    assert.ok(item.adminOnly ? role === 'admin' : can(item.permission), `${role}: ${item.to}`);
+    assert.ok(item.adminOnly ? role === 'admin' : can(item.permission,item.action||'view'), `${role}: ${item.to}`);
   }
+  assert.equal(flattenNavigation(visible.flatMap(group=>group.items)).some(item=>item.to==='/tai-khoan'),Boolean(grants.employees.manage),`${role}: accounts require employee management`);
   assert.ok(visible.every(group => group.items.length > 0));
 }
 const diagrams = NAV_GROUPS.flatMap(group => group.items).find(item => item.label === 'Sơ đồ');

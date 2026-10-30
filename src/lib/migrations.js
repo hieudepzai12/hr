@@ -1,3 +1,6 @@
+// Database upgrades 005-014. Version checks and execution order are maintained in db.js.
+
+// Migration 005-governance
 export async function migrateGovernance(client) {
   await client.query(`
     CREATE TABLE positions (
@@ -113,4 +116,88 @@ export async function migrateGovernance(client) {
   for (const table of ['positions','position_assignments','projects','project_members','staffing_plans','recruitment_requests','bonus_policies','bonus_awards','salary_budgets','document_folders','internal_documents']) {
     await client.query(`CREATE INDEX ${table}_scope_idx ON ${table}(department_id,owner_id) WHERE deleted_at IS NULL`);
   }
+}
+
+// Migration 006-audit-entity-text
+// Role keys are text; existing numeric object IDs are preserved as their text form.
+export async function migrateAuditEntityText(client){
+ await client.query('ALTER TABLE audit_logs ALTER COLUMN entity_id TYPE TEXT USING entity_id::text');
+}
+
+// Migration 007-personnel-duty-project
+export async function migratePersonnelDutyProject(client){
+ await client.query(`ALTER TABLE position_assignments ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE RESTRICT;
+ CREATE INDEX position_assignments_project_live ON position_assignments(project_id) WHERE deleted_at IS NULL;`);
+}
+
+// Migration 008-department-staffing
+export async function migrateDepartmentStaffing(client){
+ await client.query(`ALTER TABLE staffing_plans ALTER COLUMN position_id DROP NOT NULL;
+ CREATE UNIQUE INDEX staffing_department_month_unique ON staffing_plans(department_id,month)
+ WHERE deleted_at IS NULL AND position_id IS NULL;`);
+}
+
+// Migration 009-project-department-owner
+// Department work plans do not require an individual project owner.
+export async function migrateProjectDepartmentOwner(client) {
+  await client.query('ALTER TABLE projects ALTER COLUMN owner_id DROP NOT NULL');
+}
+
+// Migration 010-position-role-description
+// Keep existing duties and requirements intact; introduce the separate role/responsibility section.
+export async function migratePositionRoleDescription(client) {
+  await client.query('ALTER TABLE positions ADD COLUMN IF NOT EXISTS role_description TEXT');
+}
+
+// Migration 011-project-departments
+export async function migrateProjectDepartments(client) {
+  await client.query(`CREATE TABLE project_departments (
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    department_id INTEGER NOT NULL REFERENCES departments(id) ON DELETE RESTRICT,
+    PRIMARY KEY(project_id,department_id)
+  );
+  CREATE INDEX project_departments_department_idx ON project_departments(department_id,project_id);
+  INSERT INTO project_departments(project_id,department_id)
+    SELECT id,department_id FROM projects
+    UNION SELECT project_id,department_id FROM tasks WHERE project_id IS NOT NULL AND department_id IS NOT NULL
+    UNION SELECT m.project_id,e.department_id FROM project_members m JOIN employees e ON e.id=m.employee_id
+      WHERE e.department_id IS NOT NULL AND m.deleted_at IS NULL
+    ON CONFLICT DO NOTHING;`);
+}
+
+// Migration 012-salary-budget-groups
+export async function migrateSalaryBudgetGroups(client) {
+  await client.query(`ALTER TABLE salary_budgets
+    ADD COLUMN budget_mode TEXT NOT NULL DEFAULT 'position' CHECK(budget_mode IN ('position','aggregate')),
+    ALTER COLUMN position_id DROP NOT NULL,
+    ALTER COLUMN headcount DROP NOT NULL;
+    CREATE TABLE salary_budget_departments (
+      budget_id INTEGER NOT NULL REFERENCES salary_budgets(id) ON DELETE CASCADE,
+      department_id INTEGER NOT NULL REFERENCES departments(id) ON DELETE RESTRICT,
+      PRIMARY KEY(budget_id,department_id)
+    );
+    CREATE INDEX salary_budget_departments_department_idx ON salary_budget_departments(department_id,budget_id);
+    INSERT INTO salary_budget_departments(budget_id,department_id)
+      SELECT id,department_id FROM salary_budgets WHERE department_id IS NOT NULL;
+  `);
+}
+
+// Migration 013-department-bonuses
+export async function migrateDepartmentBonuses(client) {
+  await client.query(`ALTER TABLE bonus_awards
+    ALTER COLUMN employee_id DROP NOT NULL,
+    ADD COLUMN award_scope TEXT NOT NULL DEFAULT 'legacy'
+      CHECK (award_scope IN ('legacy','department','employee')),
+    ADD CONSTRAINT bonus_award_recipient_check CHECK (
+      (award_scope='department' AND employee_id IS NULL AND owner_id IS NULL)
+      OR (award_scope IN ('legacy','employee') AND employee_id IS NOT NULL));
+    CREATE INDEX bonus_awards_department_scope_idx ON bonus_awards(department_id,award_scope)
+      WHERE deleted_at IS NULL;
+  `);
+}
+
+// Migration 014-task-progress-text
+export async function migrateTaskProgressText(client) {
+  await client.query(`ALTER TABLE tasks ADD COLUMN progress_text TEXT NOT NULL DEFAULT '';
+    ALTER TABLE task_updates ADD COLUMN progress_text TEXT NOT NULL DEFAULT '';`);
 }

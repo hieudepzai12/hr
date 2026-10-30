@@ -24,11 +24,12 @@ export async function replaceReportItems(client, reportId, taskIds, userId) {
   const ids = [...new Set(taskIds.map(Number))];
   if (!ids.length) return;
   const { rows: tasks } = await client.query(`SELECT t.*, e.full_name AS employee_name,
-      c.name AS customer_name, c.code AS customer_code,
+      c.name AS customer_name, c.code AS customer_code, p.name AS project_name,
       own.progress AS own_progress, own.progress_text AS own_progress_text, own.result AS own_result, own.next_step AS own_next_step,
       own.blockers AS own_blockers, own.solution AS own_solution
       FROM tasks t LEFT JOIN employees e ON e.id=$2
       LEFT JOIN customers c ON c.id=t.customer_id
+      LEFT JOIN projects p ON p.id=t.project_id
       LEFT JOIN LATERAL (SELECT progress, progress_text, result, next_step, blockers, solution
         FROM task_updates WHERE task_id=t.id AND employee_id=$2 ORDER BY created_at DESC, id DESC LIMIT 1) own ON TRUE
       WHERE t.id=ANY($1::int[]) AND t.deleted_at IS NULL AND
@@ -43,7 +44,7 @@ export async function replaceReportItems(client, reportId, taskIds, userId) {
   const snapshots = ids.map(id => {
     const task = byId.get(id);
     return {
-      task_id: task.id, title: task.title, employee_id: userId, employee_name: task.employee_name,
+      task_id: task.id, title: task.title, description:task.description, project_id:task.project_id, project_name:task.project_name, employee_id: userId, employee_name: task.employee_name,
       customer_id: task.customer_id, customer_name: task.customer_name, customer_code: task.customer_code,
       department_id: task.department_id, due_date: task.due_date, data_period: task.data_period,
       status: task.status, progress: task.own_progress ?? task.progress,

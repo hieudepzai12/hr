@@ -66,11 +66,11 @@ export default function EmployeeDirectory({ accountsOnly = false }) {
   const [,setNotice]=useFeedback('success');
   const avatarFileRef = useRef(null);
 
-  useEffect(() => { api.get('/departments').then(({ data }) => setDepartments(data)); }, []);
-  useEffect(() => { api.get('/roles').then(({ data }) => setRoles(data)); }, []);
+  useEffect(() => { api.get('/departments', { params: { options: 1 } }).then(({ data }) => setDepartments(data)).catch(() => setError('Không tải được danh sách phòng ban.')); }, [setError]);
+  useEffect(() => { api.get('/roles').then(({ data }) => setRoles(data)).catch(() => setError('Không tải được danh sách vai trò.')); }, [setError]);
   useEffect(() => {
-    api.get('/employees', { params: { status: 'active', fields: 'options' } }).then(({ data }) => setManagerOptions(data));
-  }, []);
+    api.get('/employees', { params: { status: 'active', fields: 'options' } }).then(({ data }) => setManagerOptions(data)).catch(() => setError('Không tải được danh sách quản lý.'));
+  }, [setError]);
 
   const openCreate = () => {
     setEditing(null);
@@ -122,7 +122,7 @@ export default function EmployeeDirectory({ accountsOnly = false }) {
       await api.delete(`/employees/${id}`);
       load();
       setNotice('Đã ngừng hoạt động tài khoản.');
-      api.get('/employees', { params: { status: 'active', fields: 'options' } }).then(({ data }) => setManagerOptions(data));
+      api.get('/employees', { params: { status: 'active', fields: 'options' } }).then(({ data }) => setManagerOptions(data)).catch(() => setError('Không tải được danh sách quản lý.'));
     } catch (err) {
       setError(err.response?.data?.error || 'Không thể vô hiệu hóa tài khoản.');
     }

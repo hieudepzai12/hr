@@ -28,7 +28,7 @@ export const GET = withAuth(async (req, ctx, user) => {
       (SELECT COUNT(*)::int FROM departments) AS total_departments,
       (SELECT COUNT(*)::int FROM visible_tasks t WHERE
         t.due_date < $3 AND t.status NOT IN ('done','review')) AS overdue_tasks,
-      (SELECT COUNT(*)::int FROM visible_reports r WHERE r.status='submitted') AS pending_reports,
+      (SELECT COUNT(*)::int FROM visible_reports r WHERE r.status IN ('submitted','reviewed','approved')) AS submitted_reports,
       COALESCE((SELECT jsonb_agg(s) FROM (SELECT t.status, COUNT(*)::int AS c
         FROM visible_tasks t GROUP BY t.status) s), '[]'::jsonb) AS task_statuses,
       COALESCE((SELECT jsonb_agg(d) FROM (SELECT t.id, t.title, t.due_date, t.status,
@@ -46,7 +46,7 @@ export const GET = withAuth(async (req, ctx, user) => {
     tasksByStatus: counts.task_statuses,
     overdueTasks: counts.overdue_tasks,
     upcomingDeadlines: counts.deadlines,
-    pendingReports: scopeFor(user, 'reports', 'approve') !== 'none' ? counts.pending_reports : undefined,
+    submittedReports: scopeFor(user, 'reports', 'view') !== 'none' ? counts.submitted_reports : undefined,
     recentReports: counts.recent_reports,
   });
 });

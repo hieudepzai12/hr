@@ -33,7 +33,7 @@ export const NAV_GROUPS = [
     {to:'/bao-cao-quan-tri',label:'Báo cáo quản trị',icon:ChartNoAxesCombined,permission:'insights'},
   ]},
   {label:'Quản trị hệ thống',items:[
-    {to:'/tai-khoan',label:'Tài khoản',icon:UserRoundCog,permission:'employees'},
+    {to:'/tai-khoan',label:'Tài khoản',icon:UserRoundCog,permission:'employees',action:'manage'},
     {to:'/phan-quyen',label:'Vai trò và phân quyền',icon:ShieldCheck,adminOnly:true},
     {to:'/nhat-ky',label:'Nhật ký hoạt động',icon:History,permission:'activity'},
     {to:'/khach-hang',label:'Khách hàng',icon:ContactRound,permission:'customers'},
@@ -43,7 +43,7 @@ export const NAV_GROUPS = [
 export function visibleNavigation(user,can){
   function filterItems(items){
     return items.flatMap(item=>{
-      if(item.adminOnly?user?.role!=='admin':item.permission&&!can(item.permission))return [];
+      if(item.adminOnly?user?.role!=='admin':item.permission&&!can(item.permission,item.action||'view'))return [];
       if(!item.children)return [item];
       const children=filterItems(item.children);
       return children.length?[{...item,children}]:[];

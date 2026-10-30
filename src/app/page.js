@@ -8,7 +8,7 @@ import useFeedback from '@/lib/useFeedback';
 import Layout from '@/components/Layout';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { useAuth } from '@/context/AuthContext';
-import { ReportStatusBadge } from '@/components/Badges';
+import { WorkReportStatusBadge as ReportStatusBadge } from '@/components/Badges';
 import { deadlineAlert, vietnamToday } from '@/lib/deadline';
 import { scopeFor } from '@/lib/access';
 
@@ -39,7 +39,6 @@ function DashboardContent() {
   const { user } = useAuth();
   const canViewTasks = scopeFor(user, 'tasks', 'view') !== 'none';
   const canViewReports = scopeFor(user, 'reports', 'view') !== 'none';
-  const canApproveReports = canViewReports && scopeFor(user, 'reports', 'approve') !== 'none';
   const [data, setData] = useState(null);
   const [revision, setRevision] = useState(0);
   const [error, setError] = useFeedback('error');
@@ -66,11 +65,11 @@ function DashboardContent() {
   const canViewInsights=scopeFor(user,'insights','view')!=='none';
   return <Layout title="Tổng quan" subtitle={subtitle}>
     <div className="dashboard-overview space-y-4">
-      {(canViewTasks||canApproveReports)&&<div aria-label="Chỉ số công việc" className={`grid min-w-0 grid-cols-2 gap-3 ${canViewTasks?(canApproveReports?'lg:grid-cols-4':'lg:grid-cols-3'):''}`}>
+      {(canViewTasks||canViewReports)&&<div aria-label="Chỉ số công việc" className={`grid min-w-0 grid-cols-2 gap-3 ${canViewTasks?(canViewReports?'lg:grid-cols-4':'lg:grid-cols-3'):''}`}>
         {canViewTasks&&<><StatCard label="Đang thực hiện" value={inProgress} icon={ClipboardList} tone="text-blue-700" href="/timeline?status=in_progress"/>
           <StatCard label="Sắp đến hạn" value={alertsUnavailable?'—':`${upcoming.length}${alerts.length===300?'+':''}`} icon={CalendarClock} tone="text-amber-dark" href={`/timeline?from=${today}`}/>
           <StatCard label="Quá hạn" value={stats.overdueTasks} icon={CircleAlert} tone="text-clay" href={`/timeline?to=${yesterday.toISOString().slice(0,10)}`}/></>}
-        {canApproveReports&&<StatCard label="Báo cáo chờ duyệt" value={stats.pendingReports??0} icon={FileText} tone="text-teal" href="/bao-cao?status=submitted"/>}
+        {canViewReports&&<StatCard label="Báo cáo đã gửi" value={stats.submittedReports??0} icon={FileText} tone="text-teal" href="/bao-cao?status=submitted"/>}
       </div>}
       {canViewTasks&&<div className="grid min-w-0 gap-4 lg:grid-cols-2">
         <PreviewSection title="Việc cần xử lý" href="/timeline" empty="Chưa có việc cần xử lý.">

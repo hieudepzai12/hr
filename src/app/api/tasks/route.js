@@ -18,10 +18,12 @@ export const GET = withAuth(async (req, ctx, user) => {
   if (deleted && scopeFor(user, 'tasks', 'restore') === 'none') return forbidden();
   const params = [];
   let sql = `SELECT t.*, e.full_name AS assignee_name, d.name AS department_name,
-      c.name AS customer_name, c.code AS customer_code,
+      c.name AS customer_name, c.code AS customer_code, p.name AS project_name, NULL::jsonb AS report_update,
+      FALSE AS has_submitted_report,
       ARRAY(SELECT tc.employee_id FROM task_collaborators tc WHERE tc.task_id=t.id ORDER BY tc.employee_id) AS collaborator_ids
     FROM tasks t LEFT JOIN employees e ON e.id=t.assignee_id
     LEFT JOIN departments d ON d.id=t.department_id
+    LEFT JOIN projects p ON p.id=t.project_id
     LEFT JOIN customers c ON c.id=t.customer_id WHERE t.deleted_at IS ${deleted ? 'NOT NULL' : 'NULL'}`;
   if (scope === 'department') {
     params.push(user.department_id ?? -1, user.id);
@@ -31,6 +33,26 @@ export const GET = withAuth(async (req, ctx, user) => {
     params.push(user.id);
     sql += ` AND (t.assignee_id=$1 OR EXISTS
       (SELECT 1 FROM task_collaborators tc WHERE tc.task_id=t.id AND tc.employee_id=$1))`;
+  }
+  const reportScope = scopeFor(user, 'reports', 'view');
+  if (reportScope !== 'none') {
+    let reportAccess = 'TRUE';
+    if (reportScope === 'self') {
+      params.push(user.id);
+      reportAccess = `r.employee_id=$${params.length}`;
+    } else if (reportScope === 'department') {
+      params.push(user.department_id ?? -1);
+      reportAccess = `COALESCE(r.department_id,re.department_id)=$${params.length}`;
+    }
+    sql = sql.replace('FALSE AS has_submitted_report', `EXISTS(SELECT 1 FROM report_items ri
+      JOIN reports r ON r.id=ri.report_id JOIN employees re ON re.id=r.employee_id
+      WHERE ri.task_id=t.id AND r.deleted_at IS NULL AND r.status IN ('submitted','reviewed','approved')
+      AND ${reportAccess}) AS has_submitted_report`);
+    sql = sql.replace('NULL::jsonb AS report_update', `(SELECT ri.snapshot FROM report_items ri
+      JOIN reports r ON r.id=ri.report_id JOIN employees re ON re.id=r.employee_id
+      WHERE ri.task_id=t.id AND r.deleted_at IS NULL AND ${reportAccess}
+      ORDER BY r.period_end DESC NULLS LAST, r.created_at DESC, r.id DESC, ri.id DESC
+      LIMIT 1) AS report_update`);
   }
   for (const [key, column] of Object.entries({ assignee_id: 't.assignee_id', department_id: 't.department_id', customer_id: 't.customer_id', project_id: 't.project_id', status: 't.status', business_group: 't.business_group' })) {
     const value = searchParams.get(key);
@@ -63,7 +85,7 @@ export const POST = withAuth(async (req, ctx, user) => {
   const assigneeId = Number(body.assignee_id || user.id);
   const assignee = await queryOne("SELECT id, department_id FROM employees WHERE id=$1 AND status='active'", [assigneeId]);
   if (!assignee) return NextResponse.json({ error: 'Người phụ trách không hợp lệ' }, { status: 400 });
-  const selectedDepartment = body.department_id || assignee.department_id || user.department_id;
+  const selectedDepartment = body.department_id === undefined ? assignee.department_id || user.department_id : body.department_id;
   const departmentId = selectedDepartment == null || selectedDepartment === '' ? null : Number(selectedDepartment);
   if ((departmentId === null && user.role !== 'admin') || (departmentId !== null &&
     (!Number.isSafeInteger(departmentId) || departmentId <= 0 || departmentId > 2147483647))) {

@@ -19,7 +19,7 @@ export const GET = withAuth(async (req, ctx, user) => {
     r.department_id, r.customer_id, r.status, r.feedback, r.period_start, r.period_end, r.created_at,
     r.updated_at, r.submitted_at, r.deleted_at, r.version` : 'r.*'},
     e.full_name AS employee_name, d.name AS department_name, c.name AS customer_name,
-    COALESCE((SELECT jsonb_agg(jsonb_build_object('task_id',ri.task_id,
+    COALESCE((SELECT jsonb_agg(jsonb_build_object('task_id',ri.task_id,'title',ri.snapshot->>'title','description',ri.snapshot->>'description','project_id',ri.snapshot->'project_id','project_name',ri.snapshot->>'project_name','customer_id',ri.snapshot->'customer_id','customer_name',ri.snapshot->>'customer_name',
       'progress_text',ri.snapshot->>'progress_text','progress',ri.snapshot->'progress','due_date',ri.snapshot->>'due_date',
       'blockers',ri.snapshot->>'blockers','solution',ri.snapshot->>'solution') ORDER BY ri.id)
       FROM report_items ri WHERE ri.report_id=r.id),'[]'::jsonb) AS task_summaries
@@ -34,9 +34,15 @@ export const GET = withAuth(async (req, ctx, user) => {
     if (!/^[1-9]\d*$/.test(taskId) || Number(taskId)>2147483647) return NextResponse.json({error:'Mã công việc không hợp lệ'},{status:400});
     params.push(Number(taskId)); sql += ` AND EXISTS (SELECT 1 FROM report_items ri WHERE ri.report_id=r.id AND ri.task_id=$${params.length})`;
   }
+  const projectId=searchParams.get('project_id');
+  if(projectId){
+    if(!/^[1-9]\d*$/.test(projectId)||Number(projectId)>2147483647)return NextResponse.json({error:'Mã dự án không hợp lệ'},{status:400});
+    params.push(projectId);sql+=` AND EXISTS(SELECT 1 FROM report_items ri WHERE ri.report_id=r.id AND ri.snapshot->>'project_id'=$${params.length}::text)`;
+  }
   for (const [key, column] of Object.entries({ employee_id: 'r.employee_id', department_id: 'COALESCE(r.department_id,e.department_id)', customer_id: 'r.customer_id', status: 'r.status', type: 'r.type' })) {
     const value = searchParams.get(key);
-    if (value) { params.push(value); sql += ` AND ${column}=$${params.length}`; }
+    if(value&&key==='status'&&['draft','submitted'].includes(value)){params.push(value==='submitted'?['submitted','reviewed','approved']:['draft','reopened','rejected']);sql+=` AND ${column}=ANY($${params.length}::text[])`;}
+    else if (value) { params.push(value); sql += ` AND ${column}=$${params.length}`; }
   }
   if (searchParams.get('from')) { params.push(searchParams.get('from')); sql += ` AND r.period_end >= $${params.length}`; }
   if (searchParams.get('to')) { params.push(searchParams.get('to')); sql += ` AND r.period_start <= $${params.length}`; }

@@ -24,9 +24,6 @@ export const PUT = withAuth(async (req, { params }, user) => {
   const before = await loadReport(id);
   if (!before || before.deleted_at) return NextResponse.json({ error: 'Không tìm thấy báo cáo' }, { status: 404 });
   if (!canReport(user, 'edit', before)) return forbidden();
-  if (!['draft', 'reopened', 'rejected'].includes(before.status)) {
-    return NextResponse.json({ error: 'Báo cáo đã gửi hoặc đã duyệt đang khóa; cần mở lại trước khi sửa' }, { status: 409 });
-  }
   const body = await req.json().catch(() => null);
   if (typeof body?.title !== 'string' || !body.title.trim() || body.title.length > 500 ||
     typeof body.content !== 'string' || body.content.length > 100000 ||

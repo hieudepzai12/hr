@@ -83,7 +83,7 @@ export function withAuth(handler, { roles } = {}) {
     if (!tokenUser) return unauthorized();
     const pathname = new URL(req.url).pathname;
     const idSegments = pathname.match(/^\/api\/(?:employees|tasks|reports|kpi|departments)\/([^/]+)(?:\/attachments\/([^/]+))?/);
-    if (idSegments && !['alerts', 'import', 'print', 'evidence'].includes(idSegments[1]) && [idSegments[1], idSegments[2]].filter(Boolean).some(value =>
+    if (idSegments && pathname !== '/api/tasks/batch' && !['alerts', 'import', 'print', 'evidence'].includes(idSegments[1]) && [idSegments[1], idSegments[2]].filter(Boolean).some(value =>
       !/^[1-9]\d*$/.test(value) || Number(value) > 2147483647)) {
       return NextResponse.json({ error: 'ID không hợp lệ' }, { status: 400 });
     }
@@ -100,7 +100,9 @@ export function withAuth(handler, { roles } = {}) {
     const canListAssignees = pathname === '/api/employees' && req.method === 'GET' &&
       new URL(req.url).searchParams.get('fields') === 'options' &&
       (user.permissions.tasks.manage || user.permissions.kpi.manage);
-    if (required && !user.permissions[required[0]]?.[required[1]] && !canListAssignees) return forbidden();
+    const canListDepartmentOptions = pathname === '/api/departments' && req.method === 'GET' &&
+      new URL(req.url).searchParams.get('options') === '1' && user.permissions.employees.view;
+    if (required && !user.permissions[required[0]]?.[required[1]] && !canListAssignees && !canListDepartmentOptions) return forbidden();
     return handler(req, ctx, user);
   };
 }

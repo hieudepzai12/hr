@@ -5,12 +5,12 @@ import { useRouter } from 'next/navigation';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 
-export default function ProtectedRoute({ children, managerOnly = false, permission }) {
+export default function ProtectedRoute({ children, managerOnly = false, permission, action = 'view' }) {
   const { user, isManager, ready, can } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const pagePermission = permission || ({ '/': 'dashboard', '/nhan-vien': 'employees', '/so-do-to-chuc': 'organization', '/phong-ban': 'departments', '/bao-cao': 'reports', '/timeline': 'tasks', '/kpi': 'kpi' })[pathname];
-  const denied = (managerOnly && !isManager) || (pagePermission && !can(pagePermission)) || (pathname === '/phan-quyen' && user?.role !== 'admin');
+  const denied = (managerOnly && !isManager) || (pagePermission && !can(pagePermission, action)) || (pathname === '/phan-quyen' && user?.role !== 'admin');
 
   useEffect(() => {
     if (!ready) return;

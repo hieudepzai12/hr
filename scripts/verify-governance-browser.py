@@ -244,7 +244,7 @@ try:
                 wait_for("window.__reviewCount===1")
                 if evaluate("Boolean(document.querySelector('.swal2-close'))"):
                     evaluate("document.querySelector('.swal2-close').click()")
-                if evaluate("[...document.querySelectorAll('.task-list-table th')].map(th=>th.innerText)") != ['Công việc','Hạn','Thao tác']:
+                if evaluate("[...document.querySelectorAll('.task-list-table th')].map(th=>th.innerText)") != ['Công việc','Hạn / Trạng thái','Tiến độ','Vướng mắc','Giải pháp','Ý kiến lãnh đạo','Thao tác']:
                     raise RuntimeError('Task list still shows removed columns')
                 evaluate("[...document.querySelectorAll('.app-main button')].find(b=>b.innerText.trim()==='Thêm công việc').click()")
                 wait_for("Boolean(document.querySelector('[role=dialog] textarea[maxlength=\"500\"]'))")
@@ -254,7 +254,7 @@ try:
                 task_description = '- Gather documents\n- Verify figures'
                 evaluate("document.querySelector('[role=dialog] textarea[maxlength=\"500\"]').focus()")
                 command('Input.insertText', {'text':task_title})
-                evaluate("document.querySelector('[role=dialog] textarea[rows=\"6\"]').focus()")
+                evaluate("document.querySelector('[role=dialog] textarea[maxlength=\"10000\"]').focus()")
                 command('Input.insertText', {'text':task_description})
                 if evaluate("document.querySelector('[role=dialog] select[aria-label=\"Ph\u00f2ng ban c\u00f4ng vi\u1ec7c\"]').required"):
                     raise RuntimeError('Admin should not be required to select a department')
@@ -266,7 +266,7 @@ try:
                     raise RuntimeError('Priority remains in the work form')
                 if width >= 1024 and evaluate("document.querySelector('[role=dialog]').getBoundingClientRect().width") < 1100:
                     raise RuntimeError('Work form is too narrow on desktop')
-                picker_selector = '[role=dialog] input[type=date][aria-label="Chọn ngày: Hạn chót"]'
+                picker_selector = '[role=dialog] input[type=date][aria-label="Chọn ngày: Hạn chót công việc 1"]'
                 evaluate("document.querySelector("+json.dumps(picker_selector)+").parentElement.parentElement.querySelector('input[type=text]').focus()")
                 command('Input.insertText', {'text':'31/02/2026'})
                 picker_bounds=evaluate("(()=>{const input=document.querySelector("+json.dumps(picker_selector)+");const original=input.showPicker;input.showPicker=function(){const result=original.call(this);window.__calendarOpened=true;return result};input.scrollIntoView({block:'center'});const r=input.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()")
@@ -279,27 +279,26 @@ try:
                 evaluate("(()=>{const input=document.querySelector("+json.dumps(picker_selector)+");Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'2026-12-31');input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}))})()")
                 wait_for("(()=>{const input=document.querySelector("+json.dumps(picker_selector)+").parentElement.parentElement.querySelector('input[type=text]');return input.value==='31/12/2026'&&input.validity.valid})()")
                 evaluate("document.querySelector('[role=dialog] button[type=submit]').click()")
-                wait_for("!document.querySelector('[role=dialog] button[type=submit]')")
-                evaluate("[...document.querySelectorAll('[role=dialog] button')].find(b=>b.innerText.trim()==='Chi tiết').click()")
-                wait_for("Boolean(document.querySelector('[role=dialog] textarea[maxlength=\"500\"]'))")
-                if evaluate("[...document.querySelectorAll('[role=dialog] label')].find(l=>l.innerText.startsWith('Phòng ban')).querySelector('select').value") != chosen_department:
-                    raise RuntimeError('Chosen task department was overwritten by admin account department')
-                if evaluate("document.querySelector('[role=dialog] textarea[maxlength=\"500\"]').value") != task_title or evaluate("document.querySelector('[role=dialog] textarea[rows=\"6\"]').value") != task_description:
-                    raise RuntimeError('Multiline work content changed after saving')
-                image=command('Page.captureScreenshot', {'format':'png'})
-                (output / f'task-wide-form-{width}.png').write_bytes(base64.b64decode(image['data']))
-                evaluate("document.querySelector('[role=dialog] button[aria-label=\"Đóng hộp thoại\"]').click()")
                 wait_for("!document.querySelector('[role=dialog]')")
+                evaluate("window.__createdWork=null;fetch('/api/tasks?search='+encodeURIComponent("+json.dumps(f'UI multiline {width}')+")).then(r=>r.json()).then(items=>window.__createdWork=items.find(item=>item.title==="+json.dumps(task_title)+"))")
+                wait_for("Boolean(window.__createdWork)")
+                if str(evaluate("window.__createdWork.department_id||''")) != chosen_department:
+                    raise RuntimeError('Chosen department was overwritten')
+                if evaluate("window.__createdWork.description") != task_description:
+                    raise RuntimeError('Description changed after creating shared work')
                 evaluate("document.querySelector('input[aria-label=\"Tìm công việc\"]').focus()")
                 command('Input.insertText', {'text':f'UI multiline {width}'})
                 time.sleep(0.6)
                 wait_for("[...document.querySelectorAll('.task-list-table tbody p')].some(p=>p.textContent==="+json.dumps(task_description)+" && getComputedStyle(p).whiteSpace==='pre-wrap')")
-                wait_for("document.querySelectorAll('.task-list-table tbody tr[data-task-id]').length===1")
-                if not evaluate("(()=>{const buttons=[...document.querySelector('tr[data-task-id]').querySelectorAll('td:last-child button')];return buttons.length===2&&Math.abs(buttons[0].getBoundingClientRect().top-buttons[1].getBoundingClientRect().top)<1})()"):
+                wait_for("document.querySelectorAll('.task-list-table tbody [data-task-id]').length===1")
+                if evaluate("Boolean(document.querySelector('.task-list-table [data-task-id] a,.task-list-table [data-task-id] button'))"):
+                    raise AssertionError('Work titles must not open a separate editing form')
+
+                if not evaluate("(()=>{const buttons=[...document.querySelector('[data-task-project]').querySelectorAll('td:last-child button')];return buttons.length===2&&buttons.filter(button=>button.innerText.trim()==='Sửa').length===1})()"):
                     raise AssertionError('Task edit/delete buttons must share one row')
                 image=command('Page.captureScreenshot', {'format':'png'})
                 (output / f'task-multiline-table-{width}.png').write_bytes(base64.b64decode(image['data']))
-                linked_task=evaluate("document.querySelector('.task-list-table tbody tr[data-task-id]').dataset.taskId")
+                linked_task=evaluate("document.querySelector('.task-list-table tbody [data-task-id]').dataset.taskId")
                 if evaluate("Boolean(document.querySelector('.app-main a[href*=\"/bao-cao\"]'))"):
                     raise RuntimeError('Reporting link remains in the task list')
                 if width<1024:
@@ -312,9 +311,9 @@ try:
                 wait_for("Boolean(document.querySelector('[role=dialog] input[type=checkbox]'))")
                 evaluate("document.querySelector('[role=dialog] input[required]').focus()")
                 command('Input.insertText', {'text':f'Weekly report UI {width}'})
-                evaluate("[...document.querySelectorAll('[role=dialog] label')].find(l=>l.querySelector('input[type=checkbox]')&&l.innerText.trim().startsWith('#"+linked_task+" ')).querySelector('input').click()")
+                evaluate("document.querySelector('[role=dialog] input[data-report-task=\""+linked_task+"\"]').click()")
                 wait_for("Boolean(document.querySelector('[role=dialog] section h4'))")
-                if not evaluate("[...document.querySelectorAll('[role=dialog] input[type=checkbox]')].filter(i=>i.checked).length===1"):
+                if not evaluate("[...document.querySelectorAll('[role=dialog] input[data-report-task]')].filter(i=>i.checked).length===1"):
                     raise RuntimeError('Report did not preselect the linked task')
                 wait_for("[...document.querySelectorAll('[role=dialog] label')].some(l=>l.innerText.trim()==='Ti\u1ebfn \u0111\u1ed9'&&l.querySelector('textarea'))")
                 evaluate("[...document.querySelectorAll('[role=dialog] label')].find(l=>l.innerText.trim()==='Ti\u1ebfn \u0111\u1ed9').querySelector('textarea').focus()")
@@ -323,10 +322,10 @@ try:
                     evaluate("[...document.querySelectorAll('[role=dialog] label')].find(l=>l.innerText.trim()==="+json.dumps(field_label)+").querySelector('textarea').focus()")
                     command('Input.insertText',{'text':field_value})
 
-                evaluate("[...document.querySelectorAll('[role=dialog] button')].find(b=>b.innerText.trim()==='L\u01b0u c\u1eadp nh\u1eadt c\u00f4ng vi\u1ec7c').click()")
-                wait_for("[...document.querySelectorAll('[role=dialog] button')].some(b=>b.innerText.trim()==='L\u01b0u c\u1eadp nh\u1eadt c\u00f4ng vi\u1ec7c'&&!b.disabled)")
-                evaluate("fetch('/api/tasks/"+linked_task+"').then(r=>r.json()).then(t=>window.__savedLinkedProgress=t.progress_text)")
-                wait_for("window.__savedLinkedProgress==="+json.dumps(f'Linked report update {width}'))
+                if evaluate("[...document.querySelectorAll('[role=dialog] label')].some(label=>['Kết quả đã làm','Bước tiếp theo'].includes(label.innerText.trim()))||[...document.querySelectorAll('[role=dialog] button')].some(button=>button.innerText.includes('Lưu cập nhật công việc'))"):
+                    raise AssertionError('Report must use only the main Save/Submit controls')
+                if evaluate("Boolean(document.querySelector('[role=dialog] select[aria-label=\"Dự án báo cáo\"]'))"):
+                    raise AssertionError('Work selection must show work names, without project-number choices')
                 evaluate("[...document.querySelectorAll('[role=dialog] button')].find(b=>b.innerText.trim()==='L\u01b0u nh\u00e1p').click()")
                 wait_for("!document.querySelector('[role=dialog]')")
                 wait_for("Boolean(document.querySelector('.report-list-table')) && document.querySelector('.report-list-table').innerText.includes("+json.dumps(f'Linked report update {width}')+") && document.querySelector('.report-list-table').innerText.includes("+json.dumps(f'Blocker {width}')+") && document.querySelector('.report-list-table').innerText.includes("+json.dumps(f'Solution {width}')+")")
@@ -337,38 +336,70 @@ try:
                 evaluate("fetch('/api/tasks/"+linked_task+"').then(r=>r.json()).then(t=>window.__linkedProgress=t.progress_text)")
                 wait_for("window.__linkedProgress==="+json.dumps(f'Linked report update {width}'))
                 command('Page.navigate',{'url':base+'/timeline?search='+urllib.parse.quote(f'UI multiline {width}')})
-                wait_for("Boolean(document.querySelector('.task-list-table tbody tr[data-task-id]'))")
+                wait_for("Boolean(document.querySelector('.task-list-table tbody [data-task-id]'))")
                 evaluate("document.querySelector('input[aria-label=\"T\u00ecm c\u00f4ng vi\u1ec7c\"]').focus()")
                 command('Input.insertText',{'text':f'UI multiline {width}'})
                 time.sleep(0.6)
-                wait_for("document.querySelectorAll('.task-list-table tbody tr[data-task-id]').length===1")
+                wait_for("document.querySelectorAll('.task-list-table tbody [data-task-id]').length===1")
                 if evaluate("Boolean(document.querySelector('.swal2-close'))"):
                     evaluate("document.querySelector('.swal2-close').click()")
-                evaluate("[...document.querySelectorAll('.task-list-table tbody tr[data-task-id] button')].find(b=>b.innerText.trim()==='Sửa').click()")
+                evaluate("[...document.querySelectorAll('.task-list-table tbody [data-task-project] td:last-child button')].find(b=>b.innerText.trim()==='Sửa').click()")
                 wait_for("Boolean(document.querySelector('[role=dialog] textarea[maxlength=\"500\"]'))")
                 if evaluate("document.querySelector('[role=dialog] textarea[maxlength=\"500\"]').value") != task_title:
                     raise RuntimeError('Row edit opened the wrong work item')
-                evaluate("document.querySelector('[role=dialog] button[aria-label=\"Đóng hộp thoại\"]').click()")
-                wait_for("!document.querySelector('[role=dialog]')")
-                evaluate("[...document.querySelectorAll('.task-list-table tbody tr[data-task-id] button')].find(b=>b.innerText.trim()==='Xóa').click()")
-                wait_for("Boolean(document.querySelector('.swal2-textarea'))")
-                evaluate("document.querySelector('.swal2-textarea').focus()")
-                command('Input.insertText', {'text':'Delete disposable row from work list'})
+                evaluate("document.querySelector('[role=dialog] button[aria-label=\"Xóa công việc 1\"]').click()")
+                wait_for("Boolean(document.querySelector('.swal2-confirm'))")
+                if evaluate("Boolean(document.querySelector('.swal2-textarea')?.getClientRects().length)"):
+                    raise AssertionError('Work deletion must not request a reason')
+                evaluate("document.querySelector('.swal2-cancel').click()")
+                wait_for("!document.querySelector('.swal2-popup')")
+                if evaluate("document.querySelector('[role=dialog] textarea[maxlength=\"500\"]').value")!=task_title:
+                    raise AssertionError('Canceling deletion must preserve work content')
+                evaluate("document.querySelector('[role=dialog] button[aria-label=\"Xóa công việc 1\"]').click()")
+                wait_for("Boolean(document.querySelector('.swal2-confirm'))")
                 evaluate("document.querySelector('.swal2-confirm').click()")
                 wait_for("Boolean(document.querySelector('.swal2-toast.swal2-icon-success'))")
                 evaluate("window.__deletedRowCount=null;fetch('/api/tasks?deleted=1&search='+encodeURIComponent("+json.dumps(f'UI multiline {width}')+")).then(r=>r.json()).then(rows=>window.__deletedRowCount=rows.length)")
                 wait_for("window.__deletedRowCount===1")
                 evaluate("[...document.querySelectorAll('.app-main button')].find(b=>b.innerText.trim()==='Xóa bộ lọc').click()")
-                wait_for("document.querySelectorAll('.task-list-table tbody tr[data-task-id]').length>100")
-                if not evaluate("(()=>{const groups=[...document.querySelectorAll('.task-list-table tbody[data-task-assignee]')];return groups.length>1&&new Set(groups.map(g=>g.dataset.taskAssignee)).size===groups.length&&groups.every(g=>{const headings=g.querySelectorAll('.task-group-heading');return headings.length===1&&headings[0].querySelector('td').colSpan===3&&g.querySelectorAll('tr[data-task-id]').length>0})})()"):
+                wait_for("document.querySelectorAll('.task-list-table tbody [data-task-id]').length>100")
+                if not evaluate("(()=>{const groups=[...document.querySelectorAll('.task-list-table tbody[data-task-assignee]')];return groups.length>1&&new Set(groups.map(g=>g.dataset.taskAssignee)).size===groups.length&&groups.every(g=>{const headings=g.querySelectorAll('.task-group-heading');return headings.length===1&&headings[0].querySelector('td').colSpan===7&&g.querySelectorAll('[data-task-id]').length>0})})()"):
                     raise AssertionError('Task owners must appear once with all their work grouped')
+                if not evaluate("[...document.querySelectorAll('[data-task-row]')].every(row=>[...row.querySelectorAll('[data-task-id]')].every(task=>[...row.querySelectorAll('[data-task-report]')].filter(item=>item.dataset.taskReport===task.dataset.taskId).length===3))"):
+                    raise AssertionError('Each task must retain its own progress, blockers and solution')
+                evaluate("window.__filterTop=document.querySelector('input[aria-label=\"Tìm công việc\"]').getBoundingClientRect().top;window.__pageY=scrollY;document.querySelector('.task-list-scroll').scrollTop=300")
+                time.sleep(0.15)
+                if not evaluate("document.querySelector('.task-list-scroll').scrollTop>0&&Math.abs(document.querySelector('input[aria-label=\"Tìm công việc\"]').getBoundingClientRect().top-window.__filterTop)<1&&scrollY===window.__pageY"):
+                    raise AssertionError('Work list must scroll independently while filters remain in place')
+                if width>=768 and not evaluate("Math.abs(document.querySelector('.task-list-table thead th').getBoundingClientRect().top-document.querySelector('.task-list-scroll').getBoundingClientRect().top)<2"):
+                    raise AssertionError('Column headings must remain pinned while the list scrolls')
+                evaluate("document.querySelector('.task-list-scroll').scrollTop=0")
+
+
                 image=command('Page.captureScreenshot', {'format':'png'})
                 (output / f'task-grouped-{width}.png').write_bytes(base64.b64decode(image['data']))
                 if evaluate("Boolean(document.querySelector('.swal2-close'))"):
                     evaluate("document.querySelector('.swal2-close').click()")
+                grouped_count=evaluate("(()=>{const row=[...document.querySelectorAll('[data-task-project]')].find(row=>Number(row.dataset.taskCount)>1&&[...row.querySelectorAll('td:last-child button')].some(button=>button.innerText.trim()==='Sửa'));if(!row)return 0;window.__groupEditFirstId=row.querySelector('[data-task-id]').dataset.taskId;const count=Number(row.dataset.taskCount);[...row.querySelectorAll('td:last-child button')].find(button=>button.innerText.trim()==='Sửa').click();return count;})()")
+                if grouped_count<2:
+                    raise AssertionError('Need grouped work to verify shared editor')
+                wait_for("Boolean(document.querySelector('section[aria-label=\"Nội dung công việc chung\"] textarea'))")
+                if evaluate("document.querySelectorAll('section[aria-label=\"Nội dung công việc chung\"] textarea[maxlength=\"500\"]').length") != grouped_count:
+                    raise AssertionError('Shared editor must retain every original work item')
+                new_group_title=f'Edited shared work {width}'
+                evaluate("document.querySelector('section[aria-label=\"Nội dung công việc chung\"] textarea').focus();document.querySelector('section[aria-label=\"Nội dung công việc chung\"] textarea').select()")
+                command('Input.insertText', {'text':new_group_title})
+                image=command('Page.captureScreenshot', {'format':'png'})
+                (output / f'task-group-editor-{width}.png').write_bytes(base64.b64decode(image['data']))
+                evaluate("[...document.querySelectorAll('[role=dialog] button')].find(button=>button.innerText.trim()==='Lưu thay đổi').click()")
+                wait_for("!document.querySelector('[role=dialog]')")
+                wait_for("[...document.querySelectorAll('[data-task-id]')].some(item=>item.innerText.includes("+json.dumps(new_group_title)+"))")
+
+                if evaluate("Boolean(document.querySelector('.swal2-close'))"):
+                    evaluate("document.querySelector('.swal2-close').click()")
                 evaluate("[...document.querySelectorAll('button')].find(b=>b.innerText.trim()==='Ti\u1ebfn \u0111\u1ed9').click()")
                 time.sleep(0.2)
-                controls = evaluate("""(() => {const main=document.querySelector('.app-main');const select=main.querySelector('select[aria-label="Lọc nhân viên"]');return {mine:select?.querySelector('option[value="mine"]')!==null,duplicate:[...main.querySelectorAll('button')].some(b=>b.innerText==='Trong phạm vi quyền'),overflow:document.documentElement.scrollWidth>innerWidth};})()""")
+                controls = evaluate("""(() => {const main=document.querySelector('.app-main');const select=main.querySelector('select[aria-label="Lọc nhân viên"]');return {mine:select?.querySelector('option[value="mine"]')===null,duplicate:[...main.querySelectorAll('button')].some(b=>b.innerText==='Trong phạm vi quyền'),overflow:document.documentElement.scrollWidth>innerWidth};})()""")
                 if not controls['mine'] or controls['duplicate'] or controls['overflow']:
                     raise RuntimeError('Task filter or board layout check failed')
                 image = command('Page.captureScreenshot', {'format': 'png', 'captureBeyondViewport': False})
@@ -379,7 +410,7 @@ try:
                     raise RuntimeError('Task table view did not open')
                 if evaluate("Boolean(document.querySelector('.app-main nav[aria-label=\"Ph\u00e2n trang\"]'))"):
                     raise RuntimeError('Task list still has pagination')
-                if evaluate("document.querySelectorAll('.task-list-table tbody tr[data-task-id]').length") <= 100:
+                if evaluate("document.querySelectorAll('.task-list-table tbody [data-task-id]').length") <= 100:
                     raise RuntimeError('Task list did not load all matching work')
             if request.get('feedback') and route == '/phong-ban':
                 # Exercise the real UI against the disposable local database only.

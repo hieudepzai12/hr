@@ -101,7 +101,7 @@ export const DELETE = withAuth(async (req, { params }, user) => {
   if (!scopeAllows(user, 'tasks', 'delete', { ownerId: before.assignee_id, departmentId: before.department_id })) return forbidden();
   const body = await req.json().catch(() => null);
   const reason = String(body?.reason || '').trim();
-  if (!reason) return NextResponse.json({ error: 'Cần ghi lý do xóa' }, { status: 400 });
+  if (reason.length>2000) return NextResponse.json({ error: 'Lý do quá dài' }, { status: 400 });
   await transaction(async (client) => {
     const { rows } = await client.query('UPDATE tasks SET deleted_at=NOW(), deleted_reason=$1, updated_at=NOW() WHERE id=$2 RETURNING *', [reason, id]);
     await writeAudit(client, { entityType: 'task', entityId: Number(id), actorId: user.id, action: 'delete', before, after: rows[0], reason });

@@ -3,6 +3,14 @@ import { query } from '@/lib/db';
 import { withAuth } from '@/lib/auth';
 
 export const GET = withAuth(async (req, ctx, user) => {
+  if (new URL(req.url).searchParams.get('options') === '1') {
+    const canSeeAll = user.permissions.employees.manage || user.permissions.departments.manage;
+    const { rows } = await query(
+      `SELECT id, name FROM departments ${canSeeAll ? '' : 'WHERE id = $1'} ORDER BY name`,
+      canSeeAll ? [] : [user.department_id ?? -1]
+    );
+    return NextResponse.json(rows);
+  }
   const isManager = user.permissions.departments.manage;
   if (isManager) {
     const { rows } = await query(`

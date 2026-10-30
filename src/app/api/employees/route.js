@@ -21,7 +21,7 @@ export const GET = withAuth(async (req, ctx, user) => {
   const isManager = Boolean(user.permissions.employees.manage);
   const canListAssignees = fields === 'options' && (user.permissions.tasks.manage || user.permissions.kpi.manage);
 
-  let sql = fields === 'options' ? `SELECT e.id, e.full_name, e.role, e.position
+  let sql = fields === 'options' ? `SELECT e.id, e.full_name, e.role, e.position, e.department_id
              FROM employees e WHERE 1=1` : `SELECT e.id, e.full_name, e.email, e.role, e.position, e.department_id, e.manager_id,
              e.phone, e.join_date, e.status, e.avatar_color, e.avatar_path, d.name as department_name
              FROM employees e LEFT JOIN departments d ON e.department_id = d.id WHERE 1=1`;
@@ -63,6 +63,9 @@ export const POST = withAuth(async (req, ctx, user) => {
   if ((role || 'employee') === 'admin' && manager_id) {
     return NextResponse.json({ error: 'Tài khoản hệ thống không thuộc sơ đồ tổ chức' }, { status: 400 });
   }
+  if ((role || 'employee') !== 'admin' && !department_id) return NextResponse.json({ error: 'Tài khoản ngoài Admin phải thuộc một phòng ban' }, { status: 400 });
+  if (department_id && (!Number.isSafeInteger(Number(department_id)) || Number(department_id) <= 0 || Number(department_id) > 2147483647)) return NextResponse.json({ error: 'Phòng ban không hợp lệ' }, { status: 400 });
+  if (department_id && !(await query('SELECT 1 FROM departments WHERE id=$1', [department_id])).rows.length) return NextResponse.json({ error: 'Phòng ban không tồn tại' }, { status: 400 });
   const managerError = await validateManagerAssignment(null, manager_id);
   if (managerError) return NextResponse.json({ error: managerError }, { status: 400 });
   try {

@@ -288,12 +288,13 @@ try{
   folder=await change('folders',folder,'restore','admin');assert.equal(folder.deleted_at,null);
   const history=await ok(`/governance/folders/${folder.id}`,admin);assert.ok(history.versions.length>=3);assert.ok(history.history.some(row=>row.action==='restore'));
   const organization=await ok('/organization',admin);assert.ok(organization.positions.some(row=>row.id===position.id&&row.holders.includes('Verify employee')));
-  // Previous workflows still work: employee updates own work, report approval locks content and reopen retains versions.
+  // Work acceptance stays intact; reports submit without approval and edits preserve versions.
   await ok(`/tasks/${task.id}/updates`,employee,'POST',{progress:100,result:'Test complete',next_step:'',blockers:'',solution:'',submit_for_review:true},201);
   await ok(`/tasks/${task.id}/review`,actors.reviewer.cookie,'POST',{decision:'approved',opinion:'Test acceptance'});
   const report=await ok('/reports',employee,'POST',{title:`Verify report ${suffix}`,content:'Snapshot',type:'weekly',status:'submitted',period_start:'2026-10-01',period_end:'2026-10-31',task_ids:[task.id]},201);
-  await ok(`/reports/${report.id}/review`,actors.reviewer.cookie,'PUT',{status:'approved',feedback:'Verified'});
-  assert.equal((await call(`/reports/${report.id}`,employee,'PUT',{title:'Changed',content:'Changed'})).status,409);
+  assert.equal((await call(`/reports/${report.id}/review`,actors.reviewer.cookie,'PUT',{status:'approved',feedback:'Verified'})).status,410);
+  assert.equal((await call(`/reports/${report.id}`,employee,'PUT',{title:'Changed',content:'Changed'})).status,200);
+  assert.equal((await ok(`/reports/${report.id}`,employee)).versions.at(-1).snapshot.report.content,'Snapshot','Earlier report content is retained');
   const print=await call(`/tasks/print?project_id=${project.id}`,admin);assert.equal(print.status,200);assert.equal(print.data.tasks.length,1);assert.equal(print.data.tasks[0].id,task.id);
   const oldPermissions=defaultPermissions('manager');for(const key of ['positions','staffing','recruitment','projects','bonuses','budgets','documents','insights','activity'])delete oldPermissions[key];
   await ok('/permissions',admin,'PUT',{role,permissions:oldPermissions});

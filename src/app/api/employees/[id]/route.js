@@ -42,6 +42,9 @@ export const PUT = withAuth(async (req, { params }, user) => {
   if (role === 'admin' && manager_id) {
     return NextResponse.json({ error: 'Tài khoản hệ thống không thuộc sơ đồ tổ chức' }, { status: 400 });
   }
+  if (role !== 'admin' && !department_id) return NextResponse.json({ error: 'Tài khoản ngoài Admin phải thuộc một phòng ban' }, { status: 400 });
+  if (department_id && (!Number.isSafeInteger(Number(department_id)) || Number(department_id) <= 0 || Number(department_id) > 2147483647)) return NextResponse.json({ error: 'Phòng ban không hợp lệ' }, { status: 400 });
+  if (department_id && !(await query('SELECT 1 FROM departments WHERE id=$1', [department_id])).rows.length) return NextResponse.json({ error: 'Phòng ban không tồn tại' }, { status: 400 });
   const managerError = await validateManagerAssignment(id, manager_id);
   if (managerError) return NextResponse.json({ error: managerError }, { status: 400 });
   const { rows } = await query(

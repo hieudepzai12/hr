@@ -33,6 +33,30 @@ export const GET=withAuth(async(req,ctx,user)=>governanceResponse(async()=>{
     clauses.push(`(a.entity_type='${entity}' AND EXISTS(SELECT 1 FROM ${table} r WHERE r.id::text=a.entity_id AND ${scopes.join(' AND ')}))`);
   }
   if(user.role==='admin')clauses.push("a.entity_type='role'");
-  const rows=await query(`SELECT a.id,a.entity_type,a.entity_id,a.action,a.created_at,e.full_name AS actor_name FROM audit_logs a LEFT JOIN employees e ON e.id=a.actor_id WHERE ${clauses.length?clauses.join(' OR '):'FALSE'} ORDER BY a.id DESC LIMIT ${pageSize+1} OFFSET $${args.length+1}`,[...args,(page-1)*pageSize]);
+  const actorName="COALESCE(NULLIF(a.changes->'_record'->'after'->>'actor_name',''),e.full_name)";
+  const recordName="COALESCE(a.changes->'_record'->'after'->>'name',a.changes->'title'->>'after',a.changes->'title'->>'before',a.changes->'name'->>'after',a.changes->'name'->>'before',a.changes->'label'->>'after')";
+  const filters=[];
+  const action=searchParams.get('action');
+  if(action){
+    if(!/^[a-z_]{1,40}$/.test(action))throw new GovernanceError('Hành động không hợp lệ');
+    const aliases={approve:['approve','approved'],review:['review','reviewed'],reject:['reject','rejected'],edit:['edit','update']};
+    args.push(aliases[action]||[action]);filters.push(`a.action=ANY($${args.length}::text[])`);
+  }
+  const entity=searchParams.get('entity_type');
+  if(entity){
+    if(!['task','report','customer','role',...Object.keys(GOVERNANCE).map(key=>`governance:${key}`)].includes(entity))throw new GovernanceError('Mục chức năng không hợp lệ');
+    args.push(entity);filters.push(`a.entity_type=$${args.length}`);
+  }
+  const from=searchParams.get('from');const to=searchParams.get('to');
+  const validDate=value=>/^\d{4}-\d{2}-\d{2}$/.test(value)&&!Number.isNaN(Date.parse(`${value}T00:00:00Z`))&&new Date(`${value}T00:00:00Z`).toISOString().slice(0,10)===value;
+  if((from&&!validDate(from))||(to&&!validDate(to))||(from&&to&&from>to))throw new GovernanceError('Khoảng ngày không hợp lệ');
+  if(from){args.push(from);filters.push(`a.created_at>=($${args.length}::date::timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh')`);}
+  if(to){args.push(to);filters.push(`a.created_at<(($${args.length}::date+1)::timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh')`);}
+  const search=searchParams.get('search')?.trim();
+  if(search){
+    if(search.length>200)throw new GovernanceError('Từ khóa quá dài');
+    args.push(`%${search}%`);filters.push(`(${actorName} ILIKE $${args.length} OR ${recordName} ILIKE $${args.length} OR a.entity_id ILIKE $${args.length})`);
+  }
+  const rows=await query(`SELECT a.id,a.entity_type,a.entity_id,a.action,a.created_at,a.actor_id,COALESCE(NULLIF(a.changes->'_record'->'after'->>'actor_name',''),e.full_name) AS actor_name,COALESCE(a.changes->'_record'->'after'->>'name',a.changes->'title'->>'after',a.changes->'title'->>'before',a.changes->'name'->>'after',a.changes->'name'->>'before',a.changes->'label'->>'after') AS record_name FROM audit_logs a LEFT JOIN employees e ON e.id=a.actor_id WHERE (${clauses.length?clauses.join(' OR '):'FALSE'})${filters.length?' AND '+filters.join(' AND '):''} ORDER BY a.id DESC LIMIT ${pageSize+1} OFFSET $${args.length+1}`,[...args,(page-1)*pageSize]);
   return {items:rows.rows.slice(0,pageSize),hasMore:rows.rows.length>pageSize,page};
 }));

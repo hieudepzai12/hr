@@ -23,10 +23,12 @@ const columns = [
   ['Vướng mắc', 30, 'Có thể để trống.'],
   ['Giải pháp', 30, 'Đề xuất giải pháp. Có thể để trống.'],
   ['KPI', 22, 'Có thể để trống. Nhập Đã hoàn thành nếu cần gửi quản lý nghiệm thu.'],
+  ['Dự án', 30, 'Tên hoặc mã dự án có trong hệ thống. Khách hàng tự lấy theo dự án.'],
+  ['Mô tả công việc', 45, 'Nội dung cần thực hiện; có thể để trống.'],
 ];
 
 sheet.columns = columns.map(([header, width]) => ({ header, width }));
-sheet.autoFilter = { from: 'A1', to: 'J1' };
+sheet.autoFilter = { from: 'A1', to: 'L1' };
 sheet.getRow(1).height = 34;
 sheet.getRow(1).eachCell((cell, columnNumber) => {
   cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF17375F' } };

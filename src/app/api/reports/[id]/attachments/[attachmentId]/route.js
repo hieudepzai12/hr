@@ -34,7 +34,6 @@ export const DELETE = withAuth(async (req, { params }, user) => {
   const report = await loadReport(id);
   if (!report || report.deleted_at) return NextResponse.json({ error: 'Không tìm thấy báo cáo' }, { status: 404 });
   if (!canReport(user, 'edit', report)) return forbidden();
-  if (!['draft', 'reopened', 'rejected'].includes(report.status)) return NextResponse.json({ error: 'Báo cáo đang khóa' }, { status: 409 });
 
   const att = await queryOne(
     `SELECT * FROM attachments WHERE id = $1 AND entity_type = 'report' AND entity_id = $2`,

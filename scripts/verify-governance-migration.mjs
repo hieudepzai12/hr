@@ -5,9 +5,11 @@ import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import pg from 'pg';
-import { migrateProjectDepartments } from '../src/lib/migrations/011-project-departments.js';
-import { migrateSalaryBudgetGroups } from '../src/lib/migrations/012-salary-budget-groups.js';
-import { migrateDepartmentBonuses } from '../src/lib/migrations/013-department-bonuses.js';
+import {
+  migrateProjectDepartments,
+  migrateSalaryBudgetGroups,
+  migrateDepartmentBonuses
+} from '../src/lib/migrations.js';
 
 const url=new URL(process.env.DATABASE_URL||'');
 if(!['localhost','127.0.0.1'].includes(url.hostname))throw new Error('Local database only');
@@ -34,7 +36,12 @@ try{
   assert.equal((await current.query('SELECT MAX(version)::int AS version FROM schema_migrations')).rows[0].version,14);
   for(const table of ['employees','departments','tasks','reports']){
     const rows=(await current.query(`SELECT row_to_json(r) AS data FROM ${table} r ORDER BY id`)).rows;
-    if(table==='tasks')for(const row of rows)delete row.data.project_id;
+    if(table==='tasks')for(const row of rows){
+      assert.equal(row.data.project_id,null);
+      assert.equal(row.data.progress_text,'');
+      delete row.data.project_id;
+      delete row.data.progress_text;
+    }
     assert.ok(JSON.stringify(rows)===JSON.stringify(originals[table]),`Legacy ${table} data changed unexpectedly`);
   }
   await current.transaction(async client=>{
@@ -71,12 +78,13 @@ try{
     assert.equal(upgraded.award_scope,'legacy');delete upgraded.award_scope;assert.deepEqual(upgraded,original);
   });
   await current.migrateSchema();
-  assert.equal((await current.query('SELECT COUNT(*)::int AS count FROM schema_migrations WHERE version=5')).rows[0].count,1);
+  const versions=(await current.query('SELECT version,COUNT(*)::int AS count FROM schema_migrations WHERE version BETWEEN 5 AND 14 GROUP BY version ORDER BY version')).rows;
+  assert.deepEqual(versions,Array.from({length:10},(_,index)=>({version:index+5,count:1})));
   process.env.NODE_ENV='production';
   rollback=await import(pathToFileURL(oldPath).toString()+'?rollback');
   await rollback.ensureSchema();
   await rollback.closeDb();rollback=null;
-  console.log('PASS: schema 4 -> 13, legacy data retained including exact payroll amounts, project and budget departments backfilled, rerun and old-runtime compatibility.');
+  console.log('PASS: schema 4 -> 14, legacy data retained including exact payroll amounts, project and budget departments backfilled, rerun and old-runtime compatibility.');
 }finally{
   if(legacy)await legacy.closeDb();if(current)await current.closeDb();if(rollback)await rollback.closeDb();
   await unlink(resolve('imports/legacy-db.mjs')).catch(()=>{});

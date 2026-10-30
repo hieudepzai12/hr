@@ -1,15 +1,17 @@
 import { Pool, types } from 'pg';
 import bcrypt from 'bcryptjs';
-import { migrateGovernance } from './migrations/005-governance.js';
-import { migrateAuditEntityText } from './migrations/006-audit-entity-text.js';
-import { migratePersonnelDutyProject } from './migrations/007-personnel-duty-project.js';
-import { migrateDepartmentStaffing } from './migrations/008-department-staffing.js';
-import { migrateProjectDepartmentOwner } from './migrations/009-project-department-owner.js';
-import { migratePositionRoleDescription } from './migrations/010-position-role-description.js';
-import { migrateProjectDepartments } from './migrations/011-project-departments.js';
-import { migrateSalaryBudgetGroups } from './migrations/012-salary-budget-groups.js';
-import { migrateDepartmentBonuses } from './migrations/013-department-bonuses.js';
-import { migrateTaskProgressText } from './migrations/014-task-progress-text.js';
+import {
+  migrateGovernance,
+  migrateAuditEntityText,
+  migratePersonnelDutyProject,
+  migrateDepartmentStaffing,
+  migrateProjectDepartmentOwner,
+  migratePositionRoleDescription,
+  migrateProjectDepartments,
+  migrateSalaryBudgetGroups,
+  migrateDepartmentBonuses,
+  migrateTaskProgressText
+} from './migrations.js';
 // DATE has no timezone; preserve yyyy-mm-dd rather than converting through local midnight.
 types.setTypeParser(1082, (value) => value);
 
