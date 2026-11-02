@@ -26,13 +26,23 @@ export const POST = withAuth(async (req, { params }, user) => {
     return NextResponse.json({ error: 'Vui lòng chọn ảnh' }, { status: 400 });
   }
 
+  let avatarUrl;
   try {
-    const avatarUrl = await savePublicAvatar(file, targetId);
-    if (emp.avatar_path) await deletePublicAvatar(emp.avatar_path);
-    await query('UPDATE employees SET avatar_path = $1 WHERE id = $2', [avatarUrl, targetId]);
+    avatarUrl = await savePublicAvatar(file, targetId);
+  } catch {
+    return NextResponse.json({ error: 'Không thể lưu ảnh. Hãy chọn ảnh PNG, JPG, WEBP hoặc GIF hợp lệ, tối đa 3 MB.' }, { status: 400 });
+  }
+  try {
+    const result = await query('UPDATE employees SET avatar_path = $1 WHERE id = $2 AND avatar_path IS NOT DISTINCT FROM $3', [avatarUrl, targetId, emp.avatar_path]);
+    if (!result.rowCount) {
+      await deletePublicAvatar(avatarUrl).catch(() => {});
+      return NextResponse.json({ error: 'Ảnh đại diện đã thay đổi. Vui lòng tải lại và thử lại.' }, { status: 409 });
+    }
+    if (emp.avatar_path) await deletePublicAvatar(emp.avatar_path).catch(() => {});
     return NextResponse.json({ avatar_path: avatarUrl });
-  } catch (err) {
-    return NextResponse.json({ error: err.message }, { status: 400 });
+  } catch {
+    await deletePublicAvatar(avatarUrl).catch(() => {});
+    return NextResponse.json({ error: 'Chưa thể cập nhật ảnh đại diện. Vui lòng thử lại.' }, { status: 503 });
   }
 });
 
@@ -46,7 +56,8 @@ export const DELETE = withAuth(async (req, { params }, user) => {
   if (!emp) return NextResponse.json({ error: 'Không tìm thấy nhân viên' }, { status: 404 });
   if (emp.role === 'admin' && user.role !== 'admin') return forbidden();
 
-  if (emp.avatar_path) await deletePublicAvatar(emp.avatar_path);
-  await query('UPDATE employees SET avatar_path = NULL WHERE id = $1', [targetId]);
+  const result = await query('UPDATE employees SET avatar_path = NULL WHERE id = $1 AND avatar_path IS NOT DISTINCT FROM $2', [targetId, emp.avatar_path]);
+  if (!result.rowCount) return NextResponse.json({ error: 'Ảnh đại diện đã thay đổi. Vui lòng tải lại và thử lại.' }, { status: 409 });
+  if (emp.avatar_path) await deletePublicAvatar(emp.avatar_path).catch(() => {});
   return NextResponse.json({ success: true });
 });

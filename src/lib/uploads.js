@@ -3,6 +3,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { Readable } from 'stream';
 import { put, del, get } from '@vercel/blob';
+import sharp from 'sharp';
 
 // Nếu có BLOB_READ_WRITE_TOKEN (tự động có khi bật Vercel Blob trên dự án Vercel),
 // dùng Vercel Blob để lưu file — cần thiết vì Vercel không có ổ đĩa bền vững.
@@ -111,26 +112,40 @@ export async function savePublicAvatar(file, employeeId) {
   if (file.size > MAX_AVATAR_SIZE) {
     throw new Error('Ảnh vượt quá dung lượng cho phép (tối đa 3MB)');
   }
+  let buffer;
+  try {
+    buffer = await sharp(Buffer.from(await file.arrayBuffer()), { limitInputPixels: 16000000 })
+      .rotate().resize(256, 256, { fit: 'cover', withoutEnlargement: true })
+      .webp({ quality: 80 }).toBuffer();
+  } catch {
+    throw new Error('Ảnh không hợp lệ hoặc quá lớn. Vui lòng chọn ảnh khác.');
+  }
+  if (buffer.length > 64 * 1024) throw new Error('Ảnh quá phức tạp. Vui lòng chọn ảnh nhỏ hơn.');
 
-  const storedName = `emp${employeeId}-${crypto.randomUUID()}${safeExt(file.name)}`;
+  const storedName = `emp${employeeId}-${crypto.randomUUID()}.webp`;
 
   if (isBlobMode()) {
-    const blob = await put(`avatars/${storedName}`, file, { access: 'public', addRandomSuffix: false });
+    const blob = await put(`avatars/${storedName}`, buffer, { access: 'public', contentType: 'image/webp', addRandomSuffix: false });
     return blob.url;
   }
 
+  // Serverless filesystems cannot persist uploads. Small normalized avatars fit
+  // in the existing avatar_path TEXT column, without a schema change.
+  if (process.env.VERCEL) return `data:image/webp;base64,${buffer.toString('base64')}`;
+
   ensureDir(PUBLIC_UPLOAD_ROOT);
-  const buffer = Buffer.from(await file.arrayBuffer());
   fs.writeFileSync(path.join(PUBLIC_UPLOAD_ROOT, storedName), buffer);
   return `/uploads/avatars/${storedName}`;
 }
 
 export async function deletePublicAvatar(avatarUrl) {
-  if (!avatarUrl) return;
+  if (!avatarUrl || avatarUrl.startsWith('data:')) return;
   if (isRemoteUrl(avatarUrl)) {
     if (isBlobMode()) await del(avatarUrl).catch(() => {});
     return;
   }
+  // Old local avatar URLs may still exist in the database after deployment.
+  if (process.env.VERCEL) return;
   const filePath = path.join(process.cwd(), 'public', avatarUrl);
   if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 }
