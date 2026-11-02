@@ -29,13 +29,13 @@ export const GOVERNANCE = {
   members: { title: 'Nhân sự dự án', path: '/nhan-su-du-an', table: 'project_members', module: 'projects',
     description: 'Phân công nhân sự tham gia dự án và vai trò công việc, độc lập với quyền hệ thống.',
     fields: [text('name', 'Vai trò trong dự án', true), ref('project_id', 'Dự án', 'projects', true), ref('employee_id', 'Nhân viên', 'employees', true), date('start_date', 'Từ ngày'), date('end_date', 'Đến ngày'), notes('notes', 'Ghi chú')] },
-  policies: { title: 'Chính sách thưởng', path: '/thuong-du-an', table: 'bonus_policies', module: 'bonuses', workflow: true,
-    description: 'Chỉ dùng chính sách đã được duyệt. Không tự suy ra tỷ lệ từ tài liệu tổ chức.',
+  policies: { title: 'Chính sách thưởng', path: '/thuong-du-an', table: 'bonus_policies', module: 'bonuses',
+    description: 'Dữ liệu chính sách thưởng cũ, giữ lại để đối chiếu lịch sử.',
     fields: [ref('department_id', 'Phòng ban áp dụng', 'departments'), text('code', 'Mã chính sách', true), text('name', 'Tên chính sách', true), choice('calculation', 'Cách tính', { manual: 'Tiền cố định', percentage: 'Phần trăm', combined: 'Tiền cố định + phần trăm' }), number('rate', 'Tỷ lệ thưởng (%)'), notes('conditions', 'Điều kiện và căn cứ áp dụng', true), date('start_date', 'Hiệu lực từ'), date('end_date', 'Hiệu lực đến'), source] },
-  awards: { title: 'Thưởng dự án', path: '/thuong-du-an', table: 'bonus_awards', module: 'bonuses', workflow: true,
-    description: 'Đề xuất, kiểm tra căn cứ và duyệt tiền thưởng. Đây là phê duyệt thưởng, chưa phải xác nhận chi tiền.',
-    fields: [text('name', 'Nội dung thưởng', true), ref('project_id', 'Dự án', 'projects', true), ref('policy_id', 'Chính sách đã duyệt', 'policies', true), ref('department_id', 'Phòng ban nhận thưởng', 'departments'), ref('employee_id', 'Người nhận', 'employees'), { key:'fixed_amount', label:'Tiền cố định (VND)', type:'money' }, { key:'basis_amount', label:'Giá trị làm căn cứ (VND)', type:'money' }, { key:'amount', label:'Tổng thưởng (VND)', type:'money' }, notes('notes', 'Căn cứ đánh giá / ghi chú', true)] },
-  budgets: { title: 'Ngân sách tiền lương', path: '/ngan-sach-luong', table: 'salary_budgets', module: 'budgets', workflow: true,
+  awards: { title: 'Thưởng dự án', path: '/thuong-du-an', table: 'bonus_awards', module: 'bonuses',
+    description: 'Ghi nhận tiền thưởng phòng ban theo dự án. Lưu là áp dụng, không cần phê duyệt.',
+    fields: [text('name', 'Nội dung thưởng', true), ref('project_id', 'Dự án', 'projects', true), ref('department_id', 'Phòng ban nhận thưởng', 'departments', true), { key:'amount', label:'Số tiền thưởng (VND)', type:'money', required:true }, notes('notes', 'Ghi chú')] },
+  budgets: { title: 'Ngân sách tiền lương', path: '/ngan-sach-luong', table: 'salary_budgets', module: 'budgets',
     description: 'Bảng quỹ lương theo tháng. Mỗi dòng là một phòng, nhóm phòng ban; tổng cộng tự tính.',
     fields: [choice('budget_mode', 'Cách nhập', { aggregate: 'Quỹ lương tổng', position: 'Dự toán cũ theo vị trí' }), text('name', 'Bộ phận', true), { key: 'department_ids', label: 'Phòng ban', type: 'references', resource: 'departments' }, { key: 'total_amount', label: 'Quỹ lương (VND)', type: 'money', required: true }, ref('position_id', 'Vị trí', 'positions', true), { key: 'month', label: 'Tháng', type: 'month', required: true }, number('headcount', 'Số lượng'), number('base_salary', 'Lương dự toán/người (VND)', true), number('allowance', 'Phụ cấp/người (VND)'), number('employer_cost', 'Chi phí doanh nghiệp/người (VND)'), notes('notes', 'Ghi chú'), source] },
   folders: { title: 'Sơ đồ dữ liệu', path: '/so-do-luu-tru', table: 'document_folders', module: 'documents',
@@ -47,10 +47,13 @@ export const GOVERNANCE = {
 };
 export const NEW_MODULES = [['positions', 'Chức vụ & Nhiệm vụ'], ['staffing', 'Định biên'], ['recruitment', 'Tuyển dụng'], ['projects', 'Dự án'], ['bonuses', 'Quản lý thưởng'], ['budgets', 'Ngân sách tiền lương'], ['documents', 'Tài liệu nội bộ'], ['insights', 'Báo cáo quản trị'], ['activity', 'Nhật ký hoạt động']];
 export function moduleActions(module) {
+  if(module==='customers')return ['view','create','edit','delete'];
+  if(module==='reports')return ['view','create','edit','delete','restore','print'];
+  if(module==='tasks')return ['view','create','edit','comment','approve','delete','restore','print'];
   if(module==='profiles')return ['view'];
   if(['insights','activity'].includes(module))return ['view'];
-  if(['positions','projects','documents'].includes(module))return ['view','create','edit','delete','restore'];
-  if(['staffing','recruitment','bonuses','budgets'].includes(module))return ['view','create','edit','approve','delete','restore'];
+  if(['positions','projects','documents','budgets','bonuses'].includes(module))return ['view','create','edit','delete','restore'];
+  if(['staffing','recruitment'].includes(module))return ['view','create','edit','approve','delete','restore'];
   return ['view','create','edit','approve','delete','restore','print'];
 }
 export const vnd = (value) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(BigInt(String(value || 0).split('.')[0]));

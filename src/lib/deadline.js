@@ -1,7 +1,10 @@
 const DAY = 86400000;
+const vietnamDateFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit',
+});
 
 export function vietnamToday(now = new Date()) {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+  return vietnamDateFormatter.format(now);
 }
 
 export function deadlineAlert(task, now = new Date()) {

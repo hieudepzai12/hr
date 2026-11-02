@@ -34,7 +34,7 @@ function ReportItems({ items }) {
 function ReportsContent() {
   const { user } = useAuth();
   const filterPanel=useRef(null);const listPanel=useRef(null);const listEntries=useRef(null);
-  const [filter, setFilters] = useState({ employee_id: user.id });
+  const [filter, setFilters] = useState({});
   const [departments, setDepartments] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [tasks, setTasks] = useState([]);
@@ -54,15 +54,13 @@ function ReportsContent() {
     const status = query.get('status');
     const taskId = query.get('task_id');
     if (!status && !taskId) return;
-    const scope = scopeFor(user, 'reports', 'view');
-    const next = scope === 'all' ? 'all' : scope === 'department' ? 'department' : 'mine';
     queueMicrotask(() => {
-      setFilters({ ...(next === 'mine' ? { employee_id: user.id } : next === 'department' ? { department_id: user.department_id || -1 } : {}), ...(status?{status}:{}), ...(taskId?{task_id:taskId}:{}) });
+      setFilters({ ...(status?{status}:{}), ...(taskId?{task_id:taskId}:{}) });
     });
   }, [user]);
   useEffect(() => {
     if(scopeFor(user,'projects','view')!=='none')api.get('/governance/projects',{params:{options:1}}).then(({data})=>setProjects(data.projects||[])).catch(()=>{});
-    api.get('/departments').then(({ data }) => setDepartments(data)).catch(() => {});
+    api.get('/departments',{params:{options:1}}).then(({ data }) => setDepartments(data)).catch(() => {});
     api.get('/employees', { params: { fields: 'options', status: 'active' } }).then(({ data }) => setEmployees(data)).catch(() => {});
     let active = true;
     const controller = new AbortController();
@@ -132,9 +130,9 @@ function ReportsContent() {
   return <Layout title="Báo cáo công việc"
     actions={scopeFor(user, 'reports', 'create') !== 'none' && <button disabled={tasksLoading} onClick={openCreate} className="ui-button ui-button-primary">Lập báo cáo</button>}>
     {filter.task_id&&<div className="ui-card mb-3 flex flex-wrap items-center gap-3 p-3 text-sm"><span>Báo cáo liên kết công việc #{filter.task_id}</span><button type="button" className="text-teal hover:underline focus-ring" onClick={()=>setFilter('task_id','')}>Bỏ lọc công việc</button></div>}
-    <div ref={filterPanel} className="task-filters-panel ui-card mb-3 p-3">
+    <div ref={filterPanel} className="ui-filter-panel task-filters-panel ui-card mb-3 p-3">
       <div className="flex justify-end">{scopeFor(user, 'reports', 'restore') !== 'none' && <label className="ml-auto text-xs text-slate"><input type="checkbox" checked={filter.deleted === '1'} onChange={(event) => setFilter('deleted', event.target.checked ? '1' : '')} /> Đã xóa</label>}</div>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"><input type="date" aria-label="Kỳ từ" value={filter.from || ''} onChange={(e) => setFilter('from', e.target.value)} className={inputClass} /><input type="date" aria-label="Kỳ đến" value={filter.to || ''} onChange={(e) => setFilter('to', e.target.value)} className={inputClass} /><select aria-label="Phòng ban" value={filter.department_id || ''} onChange={(e) => setFilter('department_id', e.target.value)} className={inputClass}><option value="">Mọi phòng ban</option>{departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select><select aria-label="Nhân viên" value={filter.employee_id || ''} onChange={(e) => setFilter('employee_id', e.target.value)} className={inputClass}><option value="">Mọi nhân viên</option>{!employees.some(e => e.role!=='admin'&&Number(e.id) === Number(user.id)) && <option value={user.id}>Báo cáo của tôi</option>}{employees.filter(employee=>employee.role!=='admin').map((e) => <option key={e.id} value={e.id}>{e.full_name}</option>)}</select><select aria-label="Dự án" value={filter.project_id||''} onChange={event=>setFilter('project_id',event.target.value)} className={inputClass}><option value="">Mọi dự án</option>{projects.map(project=><option key={project.id} value={project.id}>{project.name}</option>)}</select><select aria-label="Trạng thái" value={filter.status || ''} onChange={(e) => setFilter('status', e.target.value)} className={inputClass}><option value="">Mọi trạng thái</option>{Object.entries(statuses).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"><input type="date" aria-label="Kỳ từ" value={filter.from || ''} onChange={(e) => setFilter('from', e.target.value)} className={inputClass} /><input type="date" aria-label="Kỳ đến" value={filter.to || ''} onChange={(e) => setFilter('to', e.target.value)} className={inputClass} /><select aria-label="Phòng ban" value={filter.department_id || ''} onChange={(e) => setFilter('department_id', e.target.value)} className={inputClass}><option value="">Mọi phòng ban</option>{departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select><select aria-label="Nhân viên" value={filter.employee_id || ''} onChange={(e) => setFilter('employee_id', e.target.value)} className={inputClass}><option value="">Mọi nhân viên</option>{employees.filter(employee=>employee.role!=='admin').map((e) => <option key={e.id} value={e.id}>{e.full_name}</option>)}</select><select aria-label="Dự án" value={filter.project_id||''} onChange={event=>setFilter('project_id',event.target.value)} className={inputClass}><option value="">Mọi dự án</option>{projects.map(project=><option key={project.id} value={project.id}>{project.name}</option>)}</select><select aria-label="Trạng thái" value={filter.status || ''} onChange={(e) => setFilter('status', e.target.value)} className={inputClass}><option value="">Mọi trạng thái</option>{Object.entries(statuses).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div>
     </div>
     {(error || listError) && <p role="alert" className="ui-notice mb-3">{error || listError}</p>}
 

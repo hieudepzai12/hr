@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import api, { SESSION_EXPIRED_EVENT } from '@/lib/api';
 import { effectivePermissions } from '@/lib/permissions';
 import { useRouter } from 'next/navigation';
@@ -20,8 +20,8 @@ export function AuthProvider({ children }) {
     };
     window.addEventListener(SESSION_EXPIRED_EVENT, expireSession);
     localStorage.removeItem('hr_token');
+    localStorage.removeItem('hr_user');
     api.get('/auth/me').then(({ data }) => {
-        localStorage.setItem('hr_user', JSON.stringify(data));
         setUser(data);
       }).catch(() => { localStorage.removeItem('hr_user'); setUser(null); })
       .finally(() => setReady(true));
@@ -32,7 +32,6 @@ export function AuthProvider({ children }) {
     setLoading(true);
     try {
       const { data } = await api.post('/auth/login', { email, password });
-      localStorage.setItem('hr_user', JSON.stringify(data.user));
       setUser(data.user);
       return { success: true };
     } catch (err) {
@@ -49,15 +48,11 @@ export function AuthProvider({ children }) {
   }, []);
 
   const updateUser = useCallback((partial) => {
-    setUser((prev) => {
-      const next = { ...prev, ...partial };
-      localStorage.setItem('hr_user', JSON.stringify(next));
-      return next;
-    });
+    setUser((prev) => ({ ...prev, ...partial }));
   }, []);
 
-  const permissions = user ? effectivePermissions(user.role, user.permissions) : {};
-  const can = (module, action = 'view') => Boolean(permissions[module]?.[action]);
+  const permissions = useMemo(() => user ? effectivePermissions(user.role, user.permissions) : {}, [user]);
+  const can = useCallback((module, action = 'view') => Boolean(permissions[module]?.[action]), [permissions]);
   return (
     <AuthContext.Provider value={{ user, login, logout, updateUser, loading, ready, can, isManager: user && (['admin', 'director', 'manager'].includes(user.role) || Object.values(permissions).some((value) => value.manage)) }}>
       {children}

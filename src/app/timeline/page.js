@@ -1,4 +1,5 @@
 'use client';
+import dynamic from 'next/dynamic';
 import { progressText } from '@/lib/task-progress';
 import { confirmAction, requestReason } from '@/lib/feedback';
 import useFeedback from '@/lib/useFeedback';
@@ -6,11 +7,11 @@ import useFeedback from '@/lib/useFeedback';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import api from '@/lib/api';
 import Layout from '@/components/Layout';
-import AuditTrail from '@/components/AuditTrail';
+const AuditTrail = dynamic(() => import('@/components/AuditTrail'));
 import Modal from '@/components/Modal';
 import ProtectedRoute from '@/components/ProtectedRoute';
-import ExcelImport from '@/components/ExcelImport';
-import TaskProgressBoard from '@/components/TaskProgressBoard';
+const ExcelImport = dynamic(() => import('@/components/ExcelImport'));
+const TaskProgressBoard = dynamic(() => import('@/components/TaskProgressBoard'));
 import useTaskList from '@/lib/useTaskList';
 import { useAuth } from '@/context/AuthContext';
 import { scopeFor, scopeAllows } from '@/lib/access';
@@ -31,6 +32,7 @@ function TaskContext({ task }) {
 }
 
 const inputClass = 'ui-field mt-1';
+const employeeNameCollator = new Intl.Collator('vi');
 const displayDate = (value) => value ? String(value).slice(0, 10).split('-').reverse().join('/') : '—';
 
 function TimelineContent() {
@@ -72,7 +74,7 @@ function TimelineContent() {
   useEffect(()=>{if(scopeFor(user,'projects','view')==='none')return;api.get('/governance/projects',{params:{options:1}}).then(({data})=>setProjects(data.projects||[])).catch(()=>{});},[user]);
   useEffect(() => {
     api.get('/employees', { params: { fields: 'options', status: 'active' } }).then(({ data }) => setEmployees(data)).catch(() => {});
-    api.get('/departments').then(({ data }) => setDepartments(data)).catch(() => {});
+    api.get('/departments',{params:{options:1}}).then(({ data }) => setDepartments(data)).catch(() => {});
     api.get('/customers', { params: { active: 1 } }).then(({ data }) => setCustomers(data)).catch(() => {});
   }, []);
   useEffect(()=>{
@@ -146,10 +148,11 @@ function TimelineContent() {
   const visibleTasks = useMemo(() => [...tasks].sort((a, b) => {
     if (a.assignee_id == null) return b.assignee_id == null ? 0 : 1;
     if (b.assignee_id == null) return -1;
-    return (a.assignee_name || '').localeCompare(b.assignee_name || '', 'vi') ||
+    return employeeNameCollator.compare(a.assignee_name || '', b.assignee_name || '') ||
       Number(a.assignee_id) - Number(b.assignee_id);
   }), [tasks]);
   const taskGroups = useMemo(() => {
+    const projectNames = new Map(projects.map(project=>[Number(project.id),project.name]));
     const groups = new Map();
     for (const task of visibleTasks) {
       const key = task.assignee_id == null ? 'unassigned' : String(task.assignee_id);
@@ -160,7 +163,7 @@ function TimelineContent() {
       const byProject = new Map();
       for (const task of group.tasks) {
         const key = taskGroupKey(task);
-        if (!byProject.has(key)) byProject.set(key, { key, name: task.project_id ? task.project_name||projects.find(project => Number(project.id) === Number(task.project_id))?.name || `Dự án #${task.project_id}` : task.customer_name || 'Chưa gắn dự án / khách hàng', tasks: [] });
+        if (!byProject.has(key)) byProject.set(key, { key, name: task.project_id ? task.project_name||projectNames.get(Number(task.project_id)) || `Dự án #${task.project_id}` : task.customer_name || 'Chưa gắn dự án / khách hàng', tasks: [] });
         byProject.get(key).tasks.push(task);
       }
       return { ...group, projects: [...byProject.values()] };
@@ -214,7 +217,7 @@ function TimelineContent() {
   };
   return <Layout title="Danh sách công việc"
     actions={<div className="task-toolbar-actions flex flex-wrap gap-2">{scopeFor(user,'tasks','restore')!=='none'&&<button type="button" aria-pressed={filters.deleted==='1'} onClick={()=>setFilter('deleted',filters.deleted==='1'?'':'1')} className="ui-button ui-button-secondary">{filters.deleted==='1'?'Về danh sách':'Đã xóa'}</button>}{scopeFor(user, 'tasks', 'create') !== 'none' && <><button onClick={() => setImportOpen(true)} className="ui-button ui-button-secondary">Nhập Excel</button><button onClick={openCreate} className="ui-button ui-button-primary">Thêm công việc</button></>}</div>}>
-    <div ref={filtersPanel} className="task-filters-panel ui-card mb-3 p-3">
+    <div ref={filtersPanel} className="ui-filter-panel task-filters-panel ui-card mb-3 p-3">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><div><h2 className="text-sm font-semibold">Danh sách công việc</h2></div><div className="flex rounded-lg border border-line bg-paper p-1" role="group" aria-label="Chế độ xem"><button onClick={() => setView('board')} aria-pressed={view === 'board'} className={`rounded-md px-3 py-1.5 text-xs font-semibold ${view === 'board' ? 'bg-white text-ink shadow-sm' : 'text-slate'}`}> Tiến độ</button><button onClick={() => setView('table')} aria-pressed={view === 'table'} className={`rounded-md px-3 py-1.5 text-xs font-semibold ${view === 'table' ? 'bg-white text-ink shadow-sm' : 'text-slate'}`}>Bảng</button></div></div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <label className="min-w-0 text-sm font-medium">Tìm kiếm<input aria-label="Tìm công việc" placeholder="Tên việc, nhân viên..." value={search} onChange={(event) => setSearch(event.target.value)} className="ui-field mt-1" /></label>
@@ -243,7 +246,7 @@ function TimelineContent() {
           <td className="task-project-content"><div data-task-id={task.id} className="task-project-item"><strong className="block whitespace-pre-wrap break-words font-semibold leading-6 text-ink">{index+1}. {task.title}</strong><TaskContext task={task} /></div></td>
           <td data-label="Hạn / Trạng thái" className="task-deadline-cell"><div data-task-deadline={task.id}><strong className="text-sm">{task.due_date?displayDate(task.due_date):'Chưa đặt hạn'}</strong><span className={`mt-1 block text-xs font-semibold ${status.className}`}>{status.label}</span></div></td>
           {['progress','blockers','solution'].map(field=>{const value=field==='progress'?progressText(task.report_update||{}):task.report_update?.[field]?.trim();return <td key={field} data-label={{progress:'Tiến độ',blockers:'Vướng mắc',solution:'Giải pháp'}[field]}><div data-task-report={task.id} className="task-report-value">{value&&value!=='—'?value:null}</div></td>;})}
-          <td data-label="Ý kiến lãnh đạo"><p className="whitespace-pre-wrap break-words text-sm leading-6">{task.leader_opinion||''}</p>{filters.deleted!=='1'&&task.has_submitted_report&&scopeAllows(user,'tasks','approve',{ownerId:task.assignee_id,departmentId:task.department_id})&&<button type="button" disabled={saving} onClick={()=>{setOpinionTask(task);setOpinionText(task.leader_opinion||'');}} className="mt-2 text-xs font-semibold text-teal hover:underline focus-ring">{task.leader_opinion?'Sửa ý kiến':'Cho ý kiến'}</button>}</td>
+          <td data-label="Ý kiến lãnh đạo"><p className="whitespace-pre-wrap break-words text-sm leading-6">{task.leader_opinion||''}</p>{filters.deleted!=='1'&&task.has_submitted_report&&scopeAllows(user,'tasks','comment',{ownerId:task.assignee_id,departmentId:task.department_id})&&<button type="button" disabled={saving} onClick={()=>{setOpinionTask(task);setOpinionText(task.leader_opinion||'');}} className="mt-2 text-xs font-semibold text-teal hover:underline focus-ring">{task.leader_opinion?'Sửa ý kiến':'Cho ý kiến'}</button>}</td>
           {index===0&&<td rowSpan={project.tasks.length} className="task-actions-cell" data-label="Thao tác">{filters.deleted!=='1'?<div className="flex flex-wrap gap-2">{project.tasks.every(canEditRow)&&<button type="button" disabled={saving||deletingId!==null} onClick={()=>openGroup(project)} className="ui-button ui-button-secondary">Sửa</button>}{project.tasks.every(canDeleteRow)&&<button type="button" disabled={saving||deletingId!==null} onClick={()=>removeGroup(project)} className="ui-button ui-button-secondary" style={{color:'var(--color-clay)'}}>{deletingId===`group-${project.tasks[0].assignee_id}-${project.key}`?'Đang xóa…':'Xóa'}</button>}</div>:project.tasks.map(task => <div key={task.id} className="mb-3"><span className="mb-1 block text-xs text-slate">#{task.id}</span>{scopeAllows(user,'tasks','restore',{ownerId:task.assignee_id,departmentId:task.department_id})&&<button type="button" onClick={()=>restore(task)} className="ui-button ui-button-secondary">Khôi phục</button>}</div>)}</td>}
         </tr>;
       })}

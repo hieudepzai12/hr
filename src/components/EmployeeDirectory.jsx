@@ -22,16 +22,21 @@ const ROLE_LABEL = { admin: 'Quản trị viên', director: 'Giám đốc', mana
 export default function EmployeeDirectory({ accountsOnly = false }) {
   const { can, user, logout } = useAuth();
   const router = useRouter();
-  const isManager = can('employees', 'manage');
+  const isManager = can('employees', 'edit');
   const [departments, setDepartments] = useState([]);
   const [roles, setRoles] = useState([]);
   const [managerOptions, setManagerOptions] = useState([]);
   const [search, setSearch] = useState('');
+  const [debouncedSearch,setDebouncedSearch]=useState('');
+  useEffect(()=>{
+    const timer=setTimeout(()=>setDebouncedSearch(search.trim()),300);
+    return()=>clearTimeout(timer);
+  },[search]);
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [{page,pageSize},setPagination]=useState({page:1,pageSize:10});
   const [revision,setRevision]=useState(0);
   const [list,setList]=useState({key:'',items:[],total:0,error:''});
-  const paramsKey=JSON.stringify({search:search||undefined,department_id:departmentFilter||undefined,limit:pageSize,offset:(page-1)*pageSize,include_total:'1'});
+  const paramsKey=JSON.stringify({accounts:accountsOnly?1:undefined,search:debouncedSearch||undefined,department_id:departmentFilter||undefined,limit:pageSize,offset:(page-1)*pageSize,include_total:'1'});
   const requestKey=`${paramsKey}:${revision}`;
   const loading=list.key!==requestKey;
   const employees=loading?[]:list.items;
@@ -128,6 +133,8 @@ export default function EmployeeDirectory({ accountsOnly = false }) {
     }
   };
 
+  const reactivate=async id=>{try{await api.patch(`/employees/${id}`,{status:'active'});load();setNotice('Đã kích hoạt lại tài khoản.');}catch(err){setError(err.response?.data?.error||'Không kích hoạt được tài khoản.');}};
+
   const uploadAvatar = async (e) => {
     const file = e.target.files?.[0];
     if (!file || !editing) return;
@@ -153,8 +160,9 @@ export default function EmployeeDirectory({ accountsOnly = false }) {
     : <strong className="break-words text-ink">{emp.full_name}</strong>;
   const employeeActions = (emp) => accountsOnly ? <div className="flex flex-wrap items-center gap-2">
     {user?.role === 'admin' && emp.id === user.id && <button type="button" onClick={()=>setPasswordTarget(emp)} className="ui-button ui-button-secondary focus-ring" title="Đổi mật khẩu Admin"><KeyRound size={15} />Đổi mật khẩu Admin</button>}
-    {user?.role === 'admin' && emp.id !== user.id && <button onClick={() => setPasswordTarget(emp)} className="ui-button ui-button-secondary focus-ring" aria-label={`Đặt lại mật khẩu cho ${emp.full_name}`} title="Đặt lại mật khẩu"><KeyRound size={15} /><span className="ml-1 text-sm">Đặt lại mật khẩu</span></button>}
-    {isManager && emp.role !== 'admin' && emp.status === 'active' && <button onClick={() => deactivate(emp.id)} className="ui-button ui-button-secondary focus-ring" style={{color:'var(--color-clay)'}} aria-label={`Ngừng hoạt động ${emp.full_name}`}><UserX size={15} />Ngừng hoạt động</button>}
+    {can('accounts','reset_password') && emp.id !== user.id && (emp.role!=='admin'||user.role==='admin') && <button onClick={() => setPasswordTarget(emp)} className="ui-button ui-button-secondary focus-ring" aria-label={`Đặt lại mật khẩu cho ${emp.full_name}`} title="Đặt lại mật khẩu"><KeyRound size={15} /><span className="ml-1 text-sm">Đặt lại mật khẩu</span></button>}
+    {can('accounts','deactivate') && emp.role !== 'admin' && emp.status === 'active' && <button onClick={() => deactivate(emp.id)} className="ui-button ui-button-secondary focus-ring" style={{color:'var(--color-clay)'}} aria-label={`Ngừng hoạt động ${emp.full_name}`}><UserX size={15} />Ngừng hoạt động</button>}
+    {can('accounts','restore')&&emp.role!=='admin'&&emp.status==='inactive'&&<button type="button" onClick={()=>reactivate(emp.id)} className="ui-button ui-button-secondary">Kích hoạt lại</button>}
   </div> : <div className="flex flex-wrap items-center justify-end gap-1">
     {isManager && (user?.role === 'admin' || emp.role !== 'admin') && <button onClick={() => openEdit(emp)} className="p-1.5 text-slate hover:text-teal transition-colors focus-ring rounded" aria-label={`Sửa ${emp.full_name}`}><Pencil size={15} /></button>}
   </div>;
@@ -163,7 +171,7 @@ export default function EmployeeDirectory({ accountsOnly = false }) {
     <Layout
       title={accountsOnly ? 'Tài khoản' : 'Nhân viên'}
       subtitle={loading?'Đang tải danh sách...':`${total} ${accountsOnly ? 'tài khoản' : 'nhân viên'} · Trang ${page}/${pageCount}`}
-      actions={accountsOnly && isManager && <button onClick={openCreate} className="flex items-center gap-1.5 bg-teal hover:bg-teal-dark text-white text-sm font-medium px-4 py-2 rounded-md transition-colors focus-ring">
+      actions={accountsOnly && can('accounts','create') && <button onClick={openCreate} className="flex items-center gap-1.5 bg-teal hover:bg-teal-dark text-white text-sm font-medium px-4 py-2 rounded-md transition-colors focus-ring">
           <Plus size={16} /> Tạo tài khoản
         </button>}
     >
@@ -171,14 +179,14 @@ export default function EmployeeDirectory({ accountsOnly = false }) {
       {listError && <div role="alert" className="mb-4 text-sm text-clay bg-[#F1DAD5] px-3 py-2 rounded-md">{listError}</div>}
 
       {!accountsOnly&&isManager&&<div className="ui-notice mb-4 text-sm">Để cập nhật sơ đồ, sửa Chức vụ, Phòng ban và Quản lý trực tiếp của nhân viên. Vai trò chỉ dùng phân quyền phần mềm; sơ đồ không tự lấy vai trò làm chức vụ.</div>}
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:max-w-3xl">
+      <div className="ui-filter-panel mb-3 grid gap-2 sm:grid-cols-2 lg:max-w-3xl">
       <div className="relative">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate" />
         <input
           value={search}
           onChange={(e) => {setSearch(e.target.value);setPagination(current=>({...current,page:1}));}}
           placeholder="Tìm theo tên hoặc email..."
-          className="w-full pl-9 pr-3 py-2 rounded-md border border-line bg-paper-raised text-sm focus-ring focus:border-teal outline-none"
+          className="ui-field pl-9 focus-ring focus:border-teal outline-none"
         />
       </div>
       <select aria-label="Lọc nhân viên theo phòng ban" value={departmentFilter} onChange={event=>{setDepartmentFilter(event.target.value);setPagination(current=>({...current,page:1}));}} className="ui-field min-w-0">

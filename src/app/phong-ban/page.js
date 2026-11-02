@@ -12,7 +12,7 @@ import { useAuth } from '@/context/AuthContext';
 
 function DepartmentsContent() {
   const { can } = useAuth();
-  const isAdmin = can('departments', 'manage');
+  const canDelete = can('departments', 'delete');
   const [departments, setDepartments] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -67,7 +67,7 @@ function DepartmentsContent() {
     <Layout
       title="Phòng ban"
       subtitle={`${departments.length} phòng ban`}
-      actions={
+      actions={can('departments','create')&&
         <button onClick={openCreate} className="flex items-center gap-1.5 bg-teal hover:bg-teal-dark text-white text-sm font-medium px-4 py-2 rounded-md transition-colors focus-ring">
           <Plus size={16} /> Thêm phòng ban
         </button>
@@ -81,10 +81,10 @@ function DepartmentsContent() {
                 <Building2 size={17} className="text-teal" />
               </div>
               <div className="flex items-center gap-1">
-                <button aria-label={`Sửa phòng ban ${d.name}`} title="Sửa phòng ban" onClick={() => openEdit(d)} className="p-1.5 text-slate hover:text-teal transition-colors focus-ring rounded">
+                {can('departments','edit')&&<button aria-label={`Sửa phòng ban ${d.name}`} title="Sửa phòng ban" onClick={() => openEdit(d)} className="p-1.5 text-slate hover:text-teal transition-colors focus-ring rounded">
                   <Pencil size={14} />
-                </button>
-                {isAdmin && (
+                </button>}
+                {canDelete && (
                   <button aria-label={`Xóa phòng ban ${d.name}`} title="Xóa phòng ban" onClick={() => remove(d)} className="p-1.5 text-slate hover:text-clay transition-colors focus-ring rounded">
                     <Trash2 size={14} />
                   </button>

@@ -18,11 +18,14 @@ export const GET = withAuth(async (req, ctx, user) => {
   const search = searchParams.get('search');
   const fields = searchParams.get('fields');
   if (fields && fields !== 'options') return NextResponse.json({ error: 'Trường dữ liệu không hợp lệ' }, { status: 400 });
-  const isManager = Boolean(user.permissions.employees.manage);
-  const canListAssignees = fields === 'options' && (user.permissions.tasks.manage || user.permissions.kpi.manage);
+  const accounts = searchParams.get('accounts') === '1';
+  const isManager = accounts ? user.permissions.accounts.view : Boolean(user.permissions.employees.manage);
+  const canListAssignees = fields === 'options' && (user.permissions.accounts.view || user.permissions.kpi.create || user.permissions.kpi.edit ||
+    ['tasks','reports','customers'].some(module=>user.permissions[module].scopes?.view==='all'));
 
   let sql = fields === 'options' ? `SELECT e.id, e.full_name, e.role, e.position, e.department_id
-             FROM employees e WHERE 1=1` : `SELECT e.id, e.full_name, e.email, e.role, e.position, e.department_id, e.manager_id,
+             FROM employees e WHERE 1=1` : accounts ? `SELECT e.id,e.full_name,e.email,e.role,e.department_id,e.status,e.avatar_color,e.avatar_path,d.name AS department_name
+             FROM employees e LEFT JOIN departments d ON e.department_id=d.id WHERE 1=1` : `SELECT e.id, e.full_name, e.email, e.role, e.position, e.department_id, e.manager_id,
              e.phone, e.join_date, e.status, e.avatar_color, e.avatar_path, d.name as department_name
              FROM employees e LEFT JOIN departments d ON e.department_id = d.id WHERE 1=1`;
   const params = [];

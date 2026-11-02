@@ -28,7 +28,9 @@ export const PUT = withAuth(async (req, { params }, user) => {
       !['active', 'inactive'].includes(status)) {
     return NextResponse.json({ error: 'Thông tin nhân viên không hợp lệ' }, { status: 400 });
   }
-  const existing = await queryOne('SELECT role FROM employees WHERE id = $1', [id]);
+  const existing = await queryOne('SELECT role,status FROM employees WHERE id = $1', [id]);
+  if(!existing)return NextResponse.json({error:'Không tìm thấy nhân viên'},{status:404});
+  if(status!==existing.status&&!user.permissions.accounts[status==='active'?'restore':'deactivate'])return NextResponse.json({error:'Bạn không có quyền thay đổi trạng thái tài khoản'},{status:403});
   if (existing?.role === 'admin' && (role !== 'admin' || status !== 'active')) {
     return NextResponse.json({ error: 'Tài khoản admin không thể bị xóa hoặc vô hiệu hóa' }, { status: 403 });
   }
@@ -63,3 +65,12 @@ export const DELETE = withAuth(async (req, { params }) => {
   if (!rowCount) return NextResponse.json({ error: 'Không thể xóa tài khoản admin hoặc tài khoản không tồn tại' }, { status: 403 });
   return NextResponse.json({ success: true });
 }, { roles: ['admin', 'director', 'manager'] });
+
+export const PATCH = withAuth(async (req, { params }) => {
+  const {id}=await params;
+  const body=await req.json().catch(()=>null);
+  if(body?.status!=='active'||Object.keys(body).some(key=>key!=='status'))return NextResponse.json({error:'Thông tin kích hoạt tài khoản không hợp lệ'},{status:400});
+  const {rows}=await query("UPDATE employees SET status='active' WHERE id=$1 AND role<>'admin' RETURNING id,status",[id]);
+  if(!rows[0])return NextResponse.json({error:'Không thể kích hoạt tài khoản này'},{status:404});
+  return NextResponse.json(rows[0]);
+}, {roles:['admin','director','manager']});

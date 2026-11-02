@@ -469,6 +469,46 @@ try:
                 if not evaluate("Boolean(document.querySelector('[role=dialog]'))"):
                     raise RuntimeError('Escape closed the underlying employee form')
                 evaluate("document.querySelector('[role=dialog] button[aria-label=' + JSON.stringify('Đóng hộp thoại') + ']').click()")
+            if route == '/phan-quyen':
+                wait_for("Boolean(document.querySelector('input[aria-label=\"edit kpi\"]'))")
+                for control in ('create kpi', 'edit kpi', 'delete kpi', 'view accounts', 'deactivate accounts', 'restore accounts', 'reset_password accounts'):
+                    if not evaluate('Boolean(document.querySelector(' + json.dumps('input[aria-label="' + control + '"]') + '))'):
+                        raise RuntimeError('Missing permission control: ' + control)
+                if not evaluate("Boolean(document.querySelector('select[aria-label=\"comment tasks\"]'))"):
+                    raise RuntimeError('Leader opinion permission missing')
+                if evaluate("Boolean(document.querySelector('select[aria-label=\"approve reports\"],select[aria-label=\"approve customers\"],select[aria-label=\"restore customers\"]'))"):
+                    raise RuntimeError('Permission screen offers unsupported actions')
+            if route == '/kpi' and request.get('kpiFixture'):
+                wait_for("Boolean(document.querySelector('[data-kpi-evaluation] details'))")
+                if evaluate("document.querySelector('[data-kpi-evaluation] details').open"):
+                    raise RuntimeError('KPI evidence should start collapsed')
+                evaluate("document.querySelector('[data-kpi-evaluation] summary').click()")
+                if evaluate("document.querySelectorAll('[data-kpi-evaluation] details ol li').length") != 8:
+                    raise RuntimeError('KPI evidence is missing')
+                if evaluate("document.documentElement.scrollWidth>innerWidth"):
+                    raise RuntimeError('Expanded KPI evidence overflows')
+                expanded = command('Page.captureScreenshot', {'format': 'png'})
+                (output / f'kpi-detail-{width}.png').write_bytes(base64.b64decode(expanded['data']))
+                evaluate("document.querySelector('[data-kpi-evaluation] summary').click()")
+                evaluate("document.querySelector('[data-kpi-evaluation] button[title=\"Sửa đánh giá\"]').click()")
+                wait_for("Boolean(document.querySelector('[role=dialog] input[name=rating]:checked'))")
+                wait_for("document.querySelectorAll('[role=dialog] input[type=checkbox]:checked').length===8")
+                if not evaluate("document.querySelector('[role=dialog] select').disabled && document.querySelector('[role=dialog] textarea').value.length>0"):
+                    raise RuntimeError('KPI edit form does not preserve existing values')
+                edit_image = command('Page.captureScreenshot', {'format': 'png'})
+                (output / f'kpi-edit-{width}.png').write_bytes(base64.b64decode(edit_image['data']))
+                command('Input.dispatchKeyEvent', {'type': 'keyDown', 'key': 'Escape', 'code': 'Escape', 'windowsVirtualKeyCode': 27})
+                command('Input.dispatchKeyEvent', {'type': 'keyUp', 'key': 'Escape', 'code': 'Escape', 'windowsVirtualKeyCode': 27})
+                wait_for("!document.querySelector('[role=dialog]')")
+                evaluate("document.querySelector('.app-main > div button').click()")
+                wait_for("Boolean(document.querySelector('[role=dialog]'))")
+                if evaluate("document.querySelectorAll('[role=dialog] input[type=radio][name=rating]').length") != 3 or evaluate("Boolean(document.querySelector('[role=dialog] input[type=number]'))"):
+                    raise RuntimeError('KPI rating form is incorrect')
+                form_image = command('Page.captureScreenshot', {'format': 'png'})
+                (output / f'kpi-form-{width}.png').write_bytes(base64.b64decode(form_image['data']))
+                command('Input.dispatchKeyEvent', {'type': 'keyDown', 'key': 'Escape', 'code': 'Escape', 'windowsVirtualKeyCode': 27})
+                command('Input.dispatchKeyEvent', {'type': 'keyUp', 'key': 'Escape', 'code': 'Escape', 'windowsVirtualKeyCode': 27})
+                wait_for("!document.querySelector('[role=dialog]')")
             report = evaluate("""(() => ({viewport: innerWidth, document: document.documentElement.scrollWidth, errors: [...document.querySelectorAll('[role=alert]')].filter(e=>!e.classList.contains('swal2-toast')||e.classList.contains('swal2-icon-error')).map(e=>e.innerText), outside: [...document.querySelectorAll('.app-header,.app-main,.ui-card')].filter(e=>{const r=e.getBoundingClientRect();return r.left < -1 || r.right > innerWidth+1}).map(e=>e.className)}))()""")
             report.update({'route': route, 'width': width})
             metrics.append(report)

@@ -3,13 +3,13 @@ import { Building2, BriefcaseBusiness, ArrowUpRight, Pencil, Search } from 'luci
 import GovernanceFields from './GovernanceFields';
 
 export function PositionDutyFilters({search,onSearch,department,onDepartment,departments,sort,direction,onSort,canRestore,deleted,onDeleted}){
-  return <div className="mb-5 rounded-xl border border-line bg-white p-3 sm:p-4">
+  return <div className="ui-filter-panel mb-3 rounded-xl border border-line bg-white p-3">
     <div className="grid gap-3 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)]">
-      <label className="relative"><span className="sr-only">Tìm chức vụ</span><Search size={17} className="absolute left-3 top-3.5 text-slate"/><input value={search} onChange={e=>onSearch(e.target.value)} placeholder="Tìm tên chức vụ..." className="ui-field" style={{paddingLeft:'2.5rem'}}/></label>
+      <label className="relative"><span className="sr-only">Tìm chức vụ</span><Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate"/><input value={search} onChange={e=>onSearch(e.target.value)} placeholder="Tìm tên chức vụ..." className="ui-field" style={{paddingLeft:'2.5rem'}}/></label>
       <select aria-label="Phòng ban" value={department} onChange={e=>onDepartment(e.target.value)} className="ui-field"><option value="">Tất cả phòng ban được xem</option>{departments?.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>
       <select aria-label="Sắp xếp chức vụ" value={`${sort}:${direction}`} onChange={e=>onSort(...e.target.value.split(':'))} className="ui-field"><option value="updated_at:desc">Cập nhật gần nhất</option><option value="name:asc">Tên chức vụ: A → Z</option><option value="name:desc">Tên chức vụ: Z → A</option><option value="created_at:desc">Mới tạo gần nhất</option></select>
     </div>
-    {canRestore&&<label className="mt-3 inline-flex items-center gap-2 text-xs text-slate"><input type="checkbox" checked={deleted} onChange={e=>onDeleted(e.target.checked)}/>Xem chức vụ đã xóa</label>}
+    {canRestore&&<label className="mt-2 inline-flex items-center gap-2 text-xs text-slate"><input type="checkbox" checked={deleted} onChange={e=>onDeleted(e.target.checked)}/>Xem chức vụ đã xóa</label>}
   </div>;
 }
 

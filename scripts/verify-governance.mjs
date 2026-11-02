@@ -199,7 +199,7 @@ try{
   let budget=await add('budgets',{name:'Local budget',position_id:position.id,month:'2026-10',headcount:3,base_salary:10000001,allowance:2000000,employer_cost:1000000,notes:'Test budget basis'});
   assert.equal(budget.total_amount,'39000003');
   assert.equal((await call(`/governance/budgets/${budget.id}`,manager)).status,403);
-  budget=await change('budgets',budget,'submit','admin');budget=await change('budgets',budget,'approve');
+  assert.equal((await call(`/governance/budgets/${budget.id}`,admin,'PATCH',{version:budget.version,action:'submit'})).status,409);
   const insights=await ok('/governance/insights?month=2026-10',manager);assert.ok(!insights.summaries.some(summary=>['budgets','awards'].includes(summary.resource)));
   const adminInsights=await ok('/governance/insights?month=2026-10',admin);assert.equal(adminInsights.summaries.find(summary=>summary.resource==='budgets').groups.find(group=>group.department_id===departmentIds[0]).approved_amount,'39000003');
   const extraBudgetDepartments=(await db.query("INSERT INTO departments(name) VALUES($1),($2) RETURNING id",[`Budget accounting ${suffix}`,`Budget audit ${suffix}`])).rows.map(row=>row.id);
@@ -258,9 +258,12 @@ try{
   assert.deepEqual(concurrent.map(result=>result.status).sort((a,b)=>a-b),[201,409]);
   assert.equal((await db.query("SELECT COUNT(*)::int AS count FROM salary_budgets WHERE month='2099-09'")).rows[0].count,3);
   await ok('/permissions',admin,'PUT',{role,permissions:managerPermissions});
-  groupedBudget=await change('budgets',groupedBudget,'submit','admin');groupedBudget=await change('budgets',groupedBudget,'approve');
-  assert.equal((await call(`/governance/budgets/${groupedBudget.id}`,admin,'PUT',{...groupedBudget,total_amount:'1'})).status,409);
-  groupedBudget=await change('budgets',groupedBudget,'reopen','admin');
+  for(const status of ['submitted','approved']) {
+    await db.query('UPDATE salary_budgets SET status=$1 WHERE id=$2',[status,groupedBudget.id]);
+    groupedBudget=await ok(`/governance/budgets/${groupedBudget.id}`,admin,'PUT',{...groupedBudget,notes:'Editable legacy '+status});
+    assert.equal(groupedBudget.notes,'Editable legacy '+status);
+    assert.equal((await call(`/governance/budgets/${groupedBudget.id}`,admin,'PATCH',{version:groupedBudget.version,action:'approve'})).status,409);
+  }
   groupedBudget=await change('budgets',groupedBudget,'delete','admin');
   groupedBudget=await change('budgets',groupedBudget,'restore','admin');assert.equal(groupedBudget.total_amount,'176000000');
   assert.deepEqual(groupedBudget.department_ids,departmentIds.slice(0,2).sort((a,b)=>a-b));
@@ -299,8 +302,12 @@ try{
   const oldPermissions=defaultPermissions('manager');for(const key of ['positions','staffing','recruitment','projects','bonuses','budgets','documents','insights','activity'])delete oldPermissions[key];
   await ok('/permissions',admin,'PUT',{role,permissions:oldPermissions});
   console.log('PASS: local migration schema, deny-by-default permissions, department isolation, validation, cycles, headcount, project/task links, approval locks, versions, recovery, exact VND calculations, scoped summaries, private document links and legacy task/report workflows.');
-  if(process.argv.includes('--browser')||process.argv.includes('--browser-duties')||process.argv.includes('--browser-chart')||process.argv.includes('--browser-tasks')||process.argv.includes('--browser-menus')||process.argv.includes('--browser-feedback')){
-    if(process.argv.includes('--browser-tasks'))await db.query('UPDATE employees SET department_id=NULL WHERE id=$1',[actors.admin.id]);
+  if(process.argv.includes('--browser')||process.argv.includes('--browser-duties')||process.argv.includes('--browser-chart')||process.argv.includes('--browser-tasks')||process.argv.includes('--browser-menus')||process.argv.includes('--browser-feedback')||process.argv.includes('--browser-permissions')){
+    if(process.argv.includes('--browser-tasks')){
+      await db.query('UPDATE employees SET department_id=NULL WHERE id=$1',[actors.admin.id]);
+      const kpiTasks=(await db.query("INSERT INTO tasks(title,assignee_id,created_by,department_id) SELECT 'Đối chiếu hồ sơ và tổng hợp số liệu công việc '||g,$1,$2,$3 FROM generate_series(1,8) g RETURNING id",[actors.employee.id,actors.admin.id,departmentIds[0]])).rows;
+      await ok('/kpi',admin,'POST',{employee_id:actors.employee.id,period:'Tháng 11/2026',rating:'Hoàn thành tốt',comments:'Hoàn thành các đầu việc đúng hạn. Chủ động phối hợp và cập nhật đầy đủ tiến độ công việc.',task_ids:kpiTasks.map(task=>task.id)},201);
+    }
     if(process.argv.includes('--browser-duties'))for(let i=1;i<=3;i++)await add('positions',{code:`UI-${suffix}-${i}`,name:`Chức vụ thử giao diện ${i}`,department_id:departmentIds[0],responsibilities:'1. Lập kế hoạch và theo dõi công việc trong phạm vi được giao.\n2. Tổng hợp hồ sơ, kiểm tra số liệu và phối hợp phòng ban.\n3. Báo cáo tiến độ, kết quả và các vấn đề cần hỗ trợ.\n4. Lưu căn cứ và đề xuất cải thiện quy trình.\n5. Bảo mật thông tin và hồ sơ nội bộ.',requirements:'Phối hợp với người phụ trách phòng ban; báo cáo đúng thời hạn và tuân thủ quyền được cấp.',verification_status:'needs_verification'});
     const {spawnSync}=await import('node:child_process');
     const {readFile}=await import('node:fs/promises');
@@ -324,7 +331,7 @@ try{
     }
     const navigationSource=process.argv.includes('--browser-menus')?await readFile('src/lib/navigation.js','utf8'):'';
     const menuRoutes=navigationSource?[...new Set([...navigationSource.matchAll(/to:'([^']+)'/g)].map(match=>match[1]).concat('/tai-lieu','/ho-so'))]:null;
-    const result=spawnSync('python',['scripts/verify-governance-browser.py'],{input:JSON.stringify({base,cookie:actors.admin.cookie,importFile,importReviewFiles,...(process.argv.includes('--browser-feedback')?{routes:['/phong-ban','/dinh-bien'],feedback:true}:{}),...(menuRoutes?{routes:menuRoutes}:{}),...(process.argv.includes('--browser-duties')?{routes:['/chuc-danh']}:{}) ,...(process.argv.includes('--browser-chart')?{routes:['/so-do-to-chuc/phong-ban']}:{}),...(process.argv.includes('--browser-tasks')?{routes:['/timeline','/bao-cao','/kpi','/nhan-vien','/tai-khoan','/ho-so','/dinh-bien','/nhat-ky']}:{})}),encoding:'utf8',timeout:240000,windowsHide:true});
+    const result=spawnSync('python',['scripts/verify-governance-browser.py'],{input:JSON.stringify({base,cookie:actors.admin.cookie,importFile,importReviewFiles,...(process.argv.includes('--browser-feedback')?{routes:['/phong-ban','/dinh-bien'],feedback:true}:{}),...(menuRoutes?{routes:menuRoutes}:{}),...(process.argv.includes('--browser-permissions')?{routes:['/phan-quyen']}:{}),...(process.argv.includes('--browser-duties')?{routes:['/chuc-danh']}:{}) ,...(process.argv.includes('--browser-chart')?{routes:['/so-do-to-chuc/phong-ban']}:{}),...(process.argv.includes('--browser-tasks')?{routes:['/timeline','/bao-cao','/kpi','/nhan-vien','/tai-khoan','/ho-so','/dinh-bien','/nhat-ky'],kpiFixture:true}:{})}),encoding:'utf8',timeout:240000,windowsHide:true});
     if(result.stdout)process.stdout.write(result.stdout);if(result.stderr)process.stderr.write(result.stderr);assert.equal(result.status,0,'Browser verification failed');
   }
 }finally{
@@ -332,6 +339,7 @@ try{
   if(ids.length){
     await db.query('DELETE FROM audit_logs WHERE actor_id=ANY($1::int[])',[ids]);
     await db.query('DELETE FROM governance_versions WHERE actor_id=ANY($1::int[])',[ids]);
+    await db.query('DELETE FROM kpi_evaluations WHERE evaluated_by=ANY($1::int[])',[ids]);
     await db.query('DELETE FROM reports WHERE employee_id=ANY($1::int[])',[ids]);
     await db.query('DELETE FROM tasks WHERE created_by=ANY($1::int[])',[ids]);
     for(const table of ['internal_documents','document_folders','salary_budgets','bonus_awards','bonus_policies','project_members','projects','recruitment_requests','staffing_plans','position_assignments','positions'])await db.query(`DELETE FROM ${table} WHERE created_by=ANY($1::int[])`,[ids]);

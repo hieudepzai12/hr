@@ -17,7 +17,7 @@ for (const role of ['admin','director','hr','manager','employee','custom_test'])
   for (const item of flattenNavigation(visible.flatMap(group => group.items))) {
     assert.ok(item.adminOnly ? role === 'admin' : can(item.permission,item.action||'view'), `${role}: ${item.to}`);
   }
-  assert.equal(flattenNavigation(visible.flatMap(group=>group.items)).some(item=>item.to==='/tai-khoan'),Boolean(grants.employees.manage),`${role}: accounts require employee management`);
+  assert.equal(flattenNavigation(visible.flatMap(group=>group.items)).some(item=>item.to==='/tai-khoan'),Boolean(grants.accounts.view),`${role}: accounts use their own view permission`);
   assert.ok(visible.every(group => group.items.length > 0));
 }
 const diagrams = NAV_GROUPS.flatMap(group => group.items).find(item => item.label === 'Sơ đồ');

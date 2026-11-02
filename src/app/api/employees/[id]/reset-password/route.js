@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import { query } from '@/lib/db';
+import { query,queryOne } from '@/lib/db';
 import { withAuth } from '@/lib/auth';
 
 export const POST = withAuth(async (req, { params }, user) => {
@@ -13,6 +13,9 @@ export const POST = withAuth(async (req, { params }, user) => {
   if (targetId === user.id) {
     return NextResponse.json({ error: 'Hãy dùng chức năng đổi mật khẩu của chính bạn' }, { status: 403 });
   }
+  const target=await queryOne('SELECT role FROM employees WHERE id=$1',[targetId]);
+  if(!target)return NextResponse.json({error:'Không tìm thấy tài khoản'},{status:404});
+  if(target.role==='admin'&&user.role!=='admin')return NextResponse.json({error:'Chỉ Admin được đặt lại mật khẩu tài khoản Admin'},{status:403});
   if (typeof new_password !== 'string' || new_password.length < 8) {
     return NextResponse.json({ error: 'Mật khẩu mới phải có ít nhất 8 ký tự' }, { status: 400 });
   }
@@ -20,4 +23,4 @@ export const POST = withAuth(async (req, { params }, user) => {
   const { rowCount } = await query('UPDATE employees SET password_hash = $1, token_version = token_version + 1 WHERE id = $2', [hash, targetId]);
   if (!rowCount) return NextResponse.json({ error: 'Không tìm thấy tài khoản' }, { status: 404 });
   return NextResponse.json({ success: true });
-}, { roles: ['admin'] });
+});

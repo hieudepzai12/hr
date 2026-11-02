@@ -4,7 +4,8 @@ import { withAuth } from '@/lib/auth';
 
 export const GET = withAuth(async (req, ctx, user) => {
   if (new URL(req.url).searchParams.get('options') === '1') {
-    const canSeeAll = user.permissions.employees.manage || user.permissions.departments.manage;
+    const canSeeAll = user.permissions.employees.manage || user.permissions.departments.manage || user.permissions.accounts.view || user.permissions.kpi.manage ||
+      ['tasks','reports','customers'].some(module=>user.permissions[module].scopes?.view==='all');
     const { rows } = await query(
       `SELECT id, name FROM departments ${canSeeAll ? '' : 'WHERE id = $1'} ORDER BY name`,
       canSeeAll ? [] : [user.department_id ?? -1]

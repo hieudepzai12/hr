@@ -1,11 +1,13 @@
 'use client';
 import {useId} from 'react';
+import {useAuth} from '@/context/AuthContext';
 import {Camera,Loader2} from 'lucide-react';
 import Avatar from './Avatar';
 import JobTitlePicker from './JobTitlePicker';
 import {jobTitles} from '@/lib/employee-job-titles';
 
 export default function EmployeeFormFields({form,setForm,editing,user,roles,departments,managerOptions,saving,avatarUploading,avatarFileRef,uploadAvatar}){
+ const {can}=useAuth();
  const prefix=useId();
  const update=(key,value)=>setForm(current=>({...current,[key]:value}));
  const field=(key,label,type='text',required=false)=><label className="block min-w-0 text-sm font-medium text-ink" htmlFor={`${prefix}-${key}`}>{label}{required&&<span className="ml-1 text-red-600">*</span>}<input id={`${prefix}-${key}`} type={type} required={required} minLength={type==='password'?8:undefined} maxLength={type==='password'?1024:undefined} autoComplete={type==='password'?'new-password':undefined} value={form[key]||''} onChange={e=>update(key,e.target.value)} className="ui-field mt-1.5"/></label>;
@@ -19,7 +21,7 @@ export default function EmployeeFormFields({form,setForm,editing,user,roles,depa
    <label htmlFor={`${prefix}-department`} className="block min-w-0 text-sm font-medium">Phòng ban chính{(form.role||'employee')!=='admin'&&<span className="ml-1 text-red-600">*</span>}<select id={`${prefix}-department`} required={(form.role||'employee')!=='admin'} value={form.department_id||''} onChange={e=>update('department_id',e.target.value)} className="ui-field mt-1.5"><option value="">Chưa phân phòng ban</option>{departments.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
    {form.role!=='admin'&&<label htmlFor={`${prefix}-manager`} className="block min-w-0 text-sm font-medium">Quản lý trực tiếp<select id={`${prefix}-manager`} value={form.manager_id||''} onChange={e=>update('manager_id',e.target.value)} className="ui-field mt-1.5"><option value="">Không có</option>{managerOptions.filter(person=>person.id!==editing?.id&&person.role!=='admin').map(person=><option key={person.id} value={person.id}>{person.full_name}{person.position?` (${person.position})`:''}</option>)}</select></label>}
    <label htmlFor={`${prefix}-role`} className="block min-w-0 text-sm font-medium">Vai trò phần mềm<select id={`${prefix}-role`} disabled={user?.role!=='admin'||editing?.role==='admin'} value={form.role||'employee'} onChange={e=>setForm(current=>({...current,role:e.target.value,manager_id:e.target.value==='admin'?'':current.manager_id}))} className="ui-field mt-1.5">{roles.map(role=><option key={role.role} value={role.role}>{role.label}</option>)}</select><span className="mt-1.5 block text-xs font-normal text-slate">Quyền truy cập, độc lập với chức vụ bên dưới.</span></label>
-   {editing&&editing.role!=='admin'&&<label htmlFor={`${prefix}-status`} className="block min-w-0 text-sm font-medium">Trạng thái<select id={`${prefix}-status`} value={form.status||'active'} onChange={e=>update('status',e.target.value)} className="ui-field mt-1.5"><option value="active">Đang làm việc</option><option value="inactive">Đã nghỉ</option></select></label>}
+   {editing&&editing.role!=='admin'&&<label htmlFor={`${prefix}-status`} className="block min-w-0 text-sm font-medium">Trạng thái<select id={`${prefix}-status`} disabled={!can('accounts',editing.status==='active'?'deactivate':'restore')} value={form.status||'active'} onChange={e=>update('status',e.target.value)} className="ui-field mt-1.5"><option value="active">Đang làm việc</option><option value="inactive">Đã nghỉ</option></select></label>}
   </div></section>
   <section className="min-w-0 border-t border-line pt-5" aria-labelledby={`${prefix}-titles`}><div className="mb-4 flex items-center gap-3"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-blue-900">3</span><div><h3 id={`${prefix}-titles`} className="font-semibold text-ink">Chức vụ &amp; kiêm nhiệm</h3><p className="mt-1 text-xs text-slate">Chọn nhiều chức vụ; chỉ định phòng khi kiêm nhiệm ở đơn vị khác.</p></div></div><JobTitlePicker value={form.position_titles||[]} onChange={titles=>update('position_titles',titles)} departments={departments} options={[...new Set(managerOptions.flatMap(person=>jobTitles(person.position)))]}/></section>
  </fieldset>;

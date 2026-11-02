@@ -29,7 +29,7 @@ export const GET = withAuth(async(req,ctx,user)=>governanceResponse(async()=>{
     let where=`r.deleted_at IS NULL AND ${scope.sql} AND ${insights.sql}`;
     if(resource==='staffing')where+=' AND r.position_id IS NULL';
     if(month&&['staffing','budgets'].includes(resource)){args.push(month);where+=` AND r.month=$${args.length}`;}
-    const amount=resource==='budgets'?'SUM(CASE WHEN r.status=\'approved\' THEN r.total_amount ELSE 0 END)':resource==='awards'?'SUM(CASE WHEN r.status=\'approved\' THEN r.amount ELSE 0 END)':'NULL::numeric';
+    const amount=resource==='budgets'?'SUM(r.total_amount)':resource==='awards'?'SUM(r.amount)':'NULL::numeric';
     const monthly=['staffing','budgets'].includes(resource);
     const groups=await query(`SELECT r.department_id,d.name AS department_name,${monthly?'r.month':'NULL::text'} AS month,COUNT(*)::int AS count,${amount} AS approved_amount ${resource==='staffing'?',SUM(r.target_count)::int AS target_count':''} FROM ${config.table} r LEFT JOIN departments d ON d.id=r.department_id WHERE ${where} GROUP BY r.department_id,d.name${monthly?',r.month':''} ORDER BY d.name${monthly?',r.month':''}`,args);
     summaries.push({resource,title:config.title,groups:groups.rows});

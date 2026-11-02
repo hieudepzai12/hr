@@ -93,15 +93,16 @@ export function withAuth(handler, { roles } = {}) {
     if (!user || user.status !== 'active') return unauthorized();
     if (tokenUser.ver !== user.token_version) return unauthorized();
     user.permissions = effectivePermissions(user.role, user.role_permissions);
-    const required = permissionForRequest(pathname, req.method);
-    const grantedManager = roles?.includes('manager') && required?.[1] === 'manage' &&
-      user.permissions[required[0]]?.manage;
+    const required = pathname==='/api/employees'&&req.method==='GET'&&new URL(req.url).searchParams.get('accounts')==='1'
+      ? ['accounts','view'] : permissionForRequest(pathname, req.method);
+    const grantedManager = roles?.includes('manager') && required?.[1] !== 'view' &&
+      user.permissions[required?.[0]]?.[required?.[1]];
     if (roles && !roles.includes(user.role) && !grantedManager) return forbidden();
     const canListAssignees = pathname === '/api/employees' && req.method === 'GET' &&
       new URL(req.url).searchParams.get('fields') === 'options' &&
-      (user.permissions.tasks.manage || user.permissions.kpi.manage);
+      (user.permissions.tasks.view || user.permissions.reports.view || user.permissions.customers.view || user.permissions.kpi.create || user.permissions.kpi.edit || user.permissions.accounts.view);
     const canListDepartmentOptions = pathname === '/api/departments' && req.method === 'GET' &&
-      new URL(req.url).searchParams.get('options') === '1' && user.permissions.employees.view;
+      new URL(req.url).searchParams.get('options') === '1' && ['employees','accounts','tasks','reports','customers','kpi'].some(module=>user.permissions[module].view);
     if (required && !user.permissions[required[0]]?.[required[1]] && !canListAssignees && !canListDepartmentOptions) return forbidden();
     return handler(req, ctx, user);
   };

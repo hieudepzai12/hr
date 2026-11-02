@@ -48,7 +48,8 @@ export const GET = withAuth(async (req, ctx, user) => {
       JOIN reports r ON r.id=ri.report_id JOIN employees re ON re.id=r.employee_id
       WHERE ri.task_id=t.id AND r.deleted_at IS NULL AND r.status IN ('submitted','reviewed','approved')
       AND ${reportAccess}) AS has_submitted_report`);
-    sql = sql.replace('NULL::jsonb AS report_update', `(SELECT ri.snapshot FROM report_items ri
+    sql = sql.replace('NULL::jsonb AS report_update', `(SELECT jsonb_build_object('progress',ri.snapshot->'progress','progress_text',ri.snapshot->'progress_text',
+      'blockers',ri.snapshot->'blockers','solution',ri.snapshot->'solution') FROM report_items ri
       JOIN reports r ON r.id=ri.report_id JOIN employees re ON re.id=r.employee_id
       WHERE ri.task_id=t.id AND r.deleted_at IS NULL AND ${reportAccess}
       ORDER BY r.period_end DESC NULLS LAST, r.created_at DESC, r.id DESC, ri.id DESC

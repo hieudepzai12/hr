@@ -20,7 +20,7 @@ function Content(){
  const changeProjectPage=next=>{setProjectPage(next);setProjects(null);setSelected('');setMembers(null);setPage(1);};
  return <Layout title="Sơ đồ nhân sự dự án" actions={<Link href="/nhan-su-du-an" className="ui-button">Quản lý phân công</Link>}>
   {error?<p role="alert" className="ui-notice">{error}</p>:!projects?<p role="status" className="ui-card ui-empty">Đang tải dự án...</p>:!projects.items.length?<p className="ui-card ui-empty">Chưa có dự án trong phạm vi được xem. Thêm dự án tại Khách hàng &amp; Dự án → Dự án, rồi phân công nhân sự.</p>:<>
-   <div className="ui-card mb-4 flex flex-wrap items-end gap-3 p-4"><label className="min-w-0 flex-1 text-sm">Dự án<select className="ui-field mt-1" value={projectId||''} onChange={e=>{setSelected(e.target.value);setPage(1);setMembers(null);}}>{projects.items.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+   <div className="ui-filter-panel ui-card mb-3 flex flex-wrap items-end gap-2 p-3"><label className="min-w-0 flex-1 text-sm">Dự án<select className="ui-field mt-1" value={projectId||''} onChange={e=>{setSelected(e.target.value);setPage(1);setMembers(null);}}>{projects.items.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
     <div className="w-full"><Pagination page={projectPage} pageSize={projectSize} total={projects.total} onPageChange={changeProjectPage} onPageSizeChange={size=>{setProjectSize(size);changeProjectPage(1);}} /></div></div>
    <section className="ui-card min-w-0 p-4 sm:p-6" aria-label="Sơ đồ phân công dự án">
     <h2 className="mx-auto max-w-md break-words rounded-xl bg-[#14243d] p-4 text-center font-semibold text-white">{project.name}</h2>

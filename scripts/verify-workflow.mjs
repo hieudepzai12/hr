@@ -279,6 +279,27 @@ try {
   }
   await db.query('UPDATE kpi_evaluations SET rating=$1 WHERE id=$2',['Hoàn thành tốt',evaluationId]);
   assert.equal(evaluation.data.evidence.length, 2);
+  const editKpiBody={employee_id:ids.employee.id,period:`verify-${suffix}`,rating:'Hoàn thành',comments:'Updated assessment',task_ids:[taskId]};
+  assert.equal((await request(`/api/kpi/${evaluationId}`,employee,'PUT',editKpiBody)).status,403,'Employees cannot edit KPI');
+  assert.equal((await request(`/api/kpi/${evaluationId}`,admin,'PUT',{...editKpiBody,rating:'Invalid'})).status,400);
+  assert.equal((await request(`/api/kpi/${evaluationId}`,admin,'PUT',{...editKpiBody,task_ids:[2147483647]})).status,403);
+  const unchangedKpi=await request(`/api/kpi?period=verify-${suffix}`,admin);
+  assert.equal(unchangedKpi.data.find(item=>item.id===evaluationId).rating,'Hoàn thành tốt','Invalid update leaves the record unchanged');
+  assert.equal(unchangedKpi.data.find(item=>item.id===evaluationId).evidence.length,2);
+  assert.equal((await request(`/api/kpi/${evaluationId}`,admin,'PUT',{...editKpiBody,employee_id:ids.other.id})).status,400);
+  assert.equal((await request('/api/kpi/2147483647',admin,'PUT',editKpiBody)).status,404);
+  const editedKpi=await request(`/api/kpi/${evaluationId}`,admin,'PUT',editKpiBody);
+  assert.equal(editedKpi.status,200);
+  assert.equal(editedKpi.data.id,evaluationId,'Editing reuses the same record');
+  assert.equal(editedKpi.data.rating,'Hoàn thành');
+  assert.equal(editedKpi.data.comments,'Updated assessment');
+  assert.equal(editedKpi.data.evidence.length,2,'Historical report evidence is preserved');
+  assert.deepEqual(editedKpi.data.evidence.find(item=>item.taskId===taskId).snapshot,evaluation.data.evidence.find(item=>item.taskId===taskId).snapshot,'Editing preserves the original evidence snapshot');
+  const clearedKpi=await request(`/api/kpi/${evaluationId}`,admin,'PUT',{...editKpiBody,task_ids:[]});
+  assert.equal(clearedKpi.status,200);
+  assert.equal(clearedKpi.data.evidence.length,1);
+  assert.equal(clearedKpi.data.evidence[0].reportId,reportId);
+  assert.equal((await db.query('SELECT COUNT(*)::int AS count FROM kpi_evaluations WHERE employee_id=$1 AND period=$2',[ids.employee.id,`verify-${suffix}`])).rows[0].count,1);
   const accountEmail = `verify-created-${suffix}@example.invalid`;
   const account = await request('/api/employees', admin, 'POST', { full_name: `Created account ${suffix}`, email: accountEmail, password, role: 'employee', department_id: departments[0].id });
   assert.equal(account.status, 201, `Account create: ${account.data.error}`);

@@ -7,7 +7,7 @@ import {jobTitles} from './employee-job-titles';
 import { canViewProject, projectDepartmentsSelect, projectViewScope } from './project-access';
 import { budgetDepartmentsSelect, budgetScope, canAccessBudget } from './salary-budget';
 import { bonusComponents } from './bonus-components';
-import { assertTransition, awardBreakdown, budgetTotal, GovernanceError, validId, validateGovernanceInput } from './governance-validation';
+import { assertTransition, budgetTotal, GovernanceError, validId, validateGovernanceInput } from './governance-validation';
 
 const REFERENCES = { departments: ['departments', 'name'], employees: ['employees', 'full_name'], customers: ['customers', 'name'], ...Object.fromEntries(Object.entries(GOVERNANCE).map(([key, value]) => [key, [value.table, 'name']])) };
 // Only expose the project's completion flag, never the underlying restricted task data.
@@ -76,7 +76,7 @@ export async function listGovernance(resource, searchParams, user) {
   }
   const search = searchParams.get('search');
   if (search) { if (search.length > 300) throw new GovernanceError('Từ khóa quá dài'); args.push(`%${search}%`); where += ` AND r.name ILIKE $${args.length}`; }
-  const sort = ['name', 'created_at', 'updated_at', 'id', ...config.fields.filter((f) => ['date', 'month', 'number', 'money'].includes(f.type)&&!(resource==='awards'&&f.key==='fixed_amount')).map((f) => f.key)].includes(searchParams.get('sort')) ? searchParams.get('sort') : 'updated_at';
+  const sort = ['name', 'created_at', 'updated_at', 'id', ...config.fields.filter((f) => ['date', 'month', 'number', 'money'].includes(f.type)).map((f) => f.key)].includes(searchParams.get('sort')) ? searchParams.get('sort') : 'updated_at';
   const direction = searchParams.get('direction') === 'asc' ? 'ASC' : 'DESC';
   const aggregates=resource==='budgets'?", COALESCE(SUM(r.total_amount),0)::text AS total_amount, SUM(r.headcount)::text AS headcount, COUNT(DISTINCT r.month)::int AS month_count":'';
   const count = await query(`SELECT COUNT(*)::int AS total ${aggregates} FROM ${config.table} r WHERE ${where}`, args);
@@ -223,32 +223,20 @@ async function prepareFields(client, resource, body, user, before, intent) {
   }
   if (resource === 'budgets'&&fields.budget_mode==='position') fields.total_amount = budgetTotal(fields);
   if (resource === 'awards') {
-    const policy = rows.policy_id;
-    if (policy.status !== 'approved') throw new GovernanceError('Chỉ áp dụng chính sách đã duyệt');
-    const legacy=before?.award_scope==='legacy';
-    if(!legacy&&policy.calculation==='combined')throw new GovernanceError('Chính sách kết hợp cũ chỉ dùng để xem lịch sử. Chọn chính sách tiền phòng ban hoặc phần trăm nhân sự');
-    fields.award_scope=legacy?'legacy':policy.calculation==='manual'?'department':'employee';
-    if(fields.award_scope==='department'){
-      if(fields.employee_id)throw new GovernanceError('Tổng thưởng phòng ban không gán hoặc chia xuống nhân sự');
-      if(!rows.department_id)throw new GovernanceError('Chọn phòng ban nhận thưởng');
-      if(!policy.department_id||policy.department_id!==fields.department_id)throw new GovernanceError('Phòng nhận thưởng phải đúng phòng áp dụng chính sách');
-      fields.employee_id=null;fields.owner_id=null;fields.basis_amount='0';
-    }else{
-      if(!rows.employee_id)throw new GovernanceError('Chọn nhân sự nhận thưởng');
-      if(!rows.employee_id.department_id)throw new GovernanceError('Nhân sự chưa thuộc phòng ban');
-      fields.department_id=rows.employee_id.department_id;fields.owner_id=fields.employee_id;
-      if(!legacy&&policy.department_id&&policy.department_id!==fields.department_id)throw new GovernanceError('Nhân sự không thuộc phòng áp dụng chính sách');
+    if(intent==='restore') {
+      // Restore historical awards without changing their recipient or calculation.
+      for(const key of ['employee_id','owner_id','award_scope','basis_amount','policy_id','policy_snapshot','amount'])fields[key]=before[key];
+    } else {
+      if(body.employee_id || body.award_scope && body.award_scope!=='department' || Number(body.basis_amount||0)!==0)throw new GovernanceError('Chỉ thưởng phòng ban bằng số tiền cố định');
+      if(BigInt(fields.amount)<=0n)throw new GovernanceError('Số tiền thưởng phải lớn hơn 0');
+      fields.award_scope='department';fields.employee_id=null;fields.owner_id=null;
+      fields.policy_id=null;fields.basis_amount='0';
+      fields.policy_snapshot=JSON.stringify({calculation:'manual',award_components:{fixed_amount:fields.amount,percentage_amount:'0'}});
     }
-    if(intent!=='restore')requireRecord(user,config,before?'edit':'create',fields);
-    if(rows.project_id){
-      if(!legacy&&![rows.project_id.department_id,...rows.project_id.department_ids].map(Number).includes(Number(fields.department_id)))throw new GovernanceError('Phòng nhận thưởng chưa tham gia dự án');
+    if(intent!=='restore'){
+      if(![rows.project_id.department_id,...rows.project_id.department_ids].map(Number).includes(Number(fields.department_id)))throw new GovernanceError('Phòng nhận thưởng chưa tham gia dự án');
       requireRecord(user,GOVERNANCE.projects,'view',rows.project_id);
     }
-    const components=awardBreakdown(policy,fields);
-    fields.basis_amount=fields.basis_amount??'0';
-    fields.policy_snapshot = JSON.stringify({...policy,award_components:{fixed_amount:components.fixed_amount,percentage_amount:components.percentage_amount}});
-    fields.amount=components.amount;
-    delete fields.fixed_amount;
   }
   const action = intent || (before ? 'edit' : 'create');
   if (intent !== 'restore') requireRecord(user, config, action, fields);
@@ -298,7 +286,7 @@ async function mutateGovernanceRecord(client, resource, id, body, user, method =
     if(resource==='staffing'&&before.position_id!=null&&['submit','approve'].includes(action))throw new GovernanceError('Đây là định biên cũ theo chức vụ. Sửa và lưu tổng định biên phòng ban trước khi gửi duyệt.',409);
     if (action === 'delete' || action === 'restore') {
       requireRecord(user, config, action, before);
-      if (action === 'delete' && before.status === 'approved') throw new GovernanceError('Mở lại bản đã duyệt trước khi xóa', 409);
+      if (action === 'delete' && config.workflow && before.status === 'approved') throw new GovernanceError('Mở lại bản đã duyệt trước khi xóa', 409);
       if ((action === 'restore') !== Boolean(before.deleted_at)) throw new GovernanceError('Trạng thái xóa đã thay đổi', 409);
       if (action === 'delete' && !String(body.reason || '').trim()) throw new GovernanceError('Cần lý do xóa');
       if(action==='delete'&&resource==='folders'){
@@ -316,12 +304,6 @@ async function mutateGovernanceRecord(client, resource, id, body, user, method =
       requireRecord(user, config, action === 'submit' ? 'edit' : 'approve', before);
       if (['reopen','reject'].includes(action) && !String(body.reason || '').trim()) throw new GovernanceError('Cần nhập lý do');
       const status = assertTransition(before, action, user.id, {role:user.role,resource});
-      if (action === 'submit' || action === 'approve') {
-        if (resource === 'awards') {
-          const policy = await client.query("SELECT 1 FROM bonus_policies WHERE id=$1 AND version=$2 AND status='approved' AND deleted_at IS NULL FOR SHARE", [before.policy_id, before.policy_snapshot.version]);
-          if (!policy.rowCount) throw new GovernanceError('Chính sách đã đổi phiên bản; mở sửa đề xuất và lưu lại để đối chiếu', 409);
-        }
-      }
       fields = { status, feedback: String(body.reason || '').slice(0,2000), reviewed_by: action === 'submit' ? null : user.id, reviewed_at: action === 'submit' ? null : new Date().toISOString() };
     }
   } else {
@@ -409,20 +391,14 @@ export async function governanceOptions(resource, user) {
     const scope = scopeFor(user, config.module, 'view');
     const params = [];
     let where = ['employees','customers'].includes(target) ? "r.status='active'" : target === 'departments' ? 'TRUE' : 'r.deleted_at IS NULL';
-    if(target==='policies'&&resource==='awards'){
-      const policyWhere=scope==='all'?'TRUE':scope==='self'?"r.calculation='percentage' AND (r.department_id IS NULL OR r.department_id=$1)":"(r.department_id=$1 OR (r.department_id IS NULL AND r.calculation='percentage'))";
-      result.policies=(await query(`SELECT r.id,r.name,r.calculation,r.rate,r.conditions,r.version,r.department_id FROM bonus_policies r WHERE r.deleted_at IS NULL AND r.status='approved' AND (${policyWhere}) ORDER BY r.name,r.id LIMIT 1000`,scope==='all'?[]:[user.department_id??-1])).rows;
-      continue;
-    }
     if(target==='projects'){
       const projectScope=projectViewScope(user,'r',params.length+1);params.push(...projectScope.params);where+=` AND ${projectScope.sql}`;
     } else if (scope === 'department') { params.push(user.department_id ?? -1); where += target === 'departments' ? ' AND r.id=$1' : ' AND r.department_id=$1'; }
     if (scope === 'self' && target === 'employees') { params.push(user.id); where += ` AND r.id=$${params.length}`; }
     else if (scope === 'self' && target !== 'departments'&&target!=='projects') { params.push(user.id); where += ` AND r.owner_id=$${params.length}`; }
     else if (scope === 'self' && target === 'departments') { params.push(user.department_id ?? -1); where += ` AND r.id=$${params.length}`; }
-    if (target === 'policies') where += " AND r.status='approved'";
     const plannedPositions=['recruitment','budgets'].includes(resource)&&target==='positions';
-    result[target] = (await query(`SELECT r.id,r.${column} AS name ${target==='policies'?',r.calculation,r.rate,r.conditions,r.version,r.department_id':''} ${resource==='awards'&&target==='employees'?',r.department_id':''} ${resource==='assignments'&&target==='employees'?',r.position':''} ${plannedPositions?',r.department_id':''} FROM ${table} r WHERE ${where} ORDER BY r.${column},r.id LIMIT 1000`,params)).rows;
+    result[target] = (await query(`SELECT r.id,r.${column} AS name ${resource==='assignments'&&target==='employees'?',r.position':''} ${plannedPositions?',r.department_id':''} FROM ${table} r WHERE ${where} ORDER BY r.${column},r.id LIMIT 1000`,params)).rows;
     if(plannedPositions){
       const args=[];let employeeWhere="e.status='active' AND e.role<>'admin' AND e.department_id IS NOT NULL";
       if(scope==='department'){args.push(user.department_id??-1);employeeWhere+=' AND e.department_id=$1';}

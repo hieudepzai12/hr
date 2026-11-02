@@ -1,6 +1,10 @@
 'use client';
 
-import Swal from 'sweetalert2';
+let alertLibrary;
+async function loadAlerts() {
+  if (!alertLibrary) alertLibrary = (await import('sweetalert2')).default;
+  return alertLibrary;
+}
 
 const base = {
   confirmButtonText: 'Đồng ý', cancelButtonText: 'Hủy',
@@ -24,17 +28,21 @@ export function notify(message, kind = 'success') {
   const key = `${icon}:${text}`;
   if (notices.has(key)) return Promise.resolve();
   notices.add(key);
-  return enqueue(() => Swal.fire({ ...base, icon, titleText: text, toast: true,
+  return enqueue(async () => {
+    const Swal = await loadAlerts();
+    return Swal.fire({ ...base, icon, titleText: text, toast: true,
     position: 'top-end', showConfirmButton: false, showCloseButton: true,
     closeButtonAriaLabel: 'Đóng thông báo', timer: icon === 'error' ? 8000 : 4000,
     timerProgressBar: true, didOpen: popup => {
       popup.addEventListener('mouseenter', Swal.stopTimer);
       popup.addEventListener('mouseleave', Swal.resumeTimer);
     },
-  })).finally(() => notices.delete(key));
+  });
+  }).finally(() => notices.delete(key));
 }
 
 export async function confirmAction(text) {
+  const Swal = await loadAlerts();
   if (Swal.getPopup()?.classList.contains('swal2-toast')) Swal.close();
   const result = await enqueue(() => Swal.fire({ ...base, icon: 'warning',
     titleText: 'Xác nhận thao tác', text, showCancelButton: true,
@@ -44,6 +52,7 @@ export async function confirmAction(text) {
 }
 
 export async function requestReason(text) {
+  const Swal = await loadAlerts();
   if (Swal.getPopup()?.classList.contains('swal2-toast')) Swal.close();
   const result = await enqueue(() => Swal.fire({ ...base, titleText: text,
     input: 'textarea', inputPlaceholder: 'Nhập lý do…', inputAttributes: { maxlength: '2000', 'aria-label': text },
@@ -53,4 +62,4 @@ export async function requestReason(text) {
   return result.isConfirmed ? result.value.trim() : null;
 }
 
-export const isFeedbackOpen = () => Swal.isVisible() && !Swal.getPopup()?.classList.contains('swal2-toast');
+export const isFeedbackOpen = () => Boolean(alertLibrary?.isVisible() && !alertLibrary.getPopup()?.classList.contains('swal2-toast'));

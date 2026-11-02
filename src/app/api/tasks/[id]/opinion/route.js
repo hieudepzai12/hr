@@ -13,7 +13,7 @@ export const POST=withAuth(async(req,{params},user)=>{
     const {rows}=await client.query('SELECT * FROM tasks WHERE id=$1 AND deleted_at IS NULL FOR UPDATE',[id]);
     const before=rows[0];
     if(!before)return NextResponse.json({error:'Không tìm thấy công việc'},{status:404});
-    if(!scopeAllows(user,'tasks','approve',{ownerId:before.assignee_id,departmentId:before.department_id})||!await canViewTask(before,user))return forbidden();
+    if(!scopeAllows(user,'tasks','comment',{ownerId:before.assignee_id,departmentId:before.department_id})||!await canViewTask(before,user))return forbidden();
     const reportScope=scopeFor(user,'reports','view');
     const reportAccess=reportScope==='all'?'TRUE':reportScope==='self'?'r.employee_id=$2':reportScope==='department'?'COALESCE(r.department_id,e.department_id)=$2':'FALSE';
     const reportParams=[id];

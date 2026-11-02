@@ -6,7 +6,7 @@ import { savePublicAvatar, deletePublicAvatar } from '@/lib/uploads';
 export const POST = withAuth(async (req, { params }, user) => {
   const { id } = await params;
   const targetId = Number(id);
-  const isManager = user.permissions.employees.manage;
+  const isManager = user.permissions.employees.edit;
   if (!isManager && user.id !== targetId) {
     return forbidden('Bạn chỉ có thể cập nhật ảnh đại diện của chính mình');
   }
@@ -39,7 +39,7 @@ export const POST = withAuth(async (req, { params }, user) => {
 export const DELETE = withAuth(async (req, { params }, user) => {
   const { id } = await params;
   const targetId = Number(id);
-  const isManager = user.permissions.employees.manage;
+  const isManager = user.permissions.employees.edit;
   if (!isManager && user.id !== targetId) return forbidden();
 
   const emp = await queryOne('SELECT * FROM employees WHERE id = $1', [targetId]);

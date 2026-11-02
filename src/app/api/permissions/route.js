@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { withAuth } from '@/lib/auth';
-import { MODULES, ORGANIZATION_SCOPES, SCOPED_MODULES, DATA_ACTIONS, DATA_SCOPES } from '@/lib/permissions';
+import { MODULES, ORGANIZATION_SCOPES, SCOPED_MODULES, DATA_ACTIONS, DATA_SCOPES, ACTION_MODULES } from '@/lib/permissions';
 import { listRoles, roleExists, getRolePermissions } from '@/lib/role-permissions';
 import { NEW_MODULES } from '@/lib/governance-config';
 import { randomUUID } from 'node:crypto';
@@ -40,6 +40,16 @@ export const PUT = withAuth(async (req, ctx, user) => {
   const permissions = submittedPermissions && typeof submittedPermissions === 'object' && !Array.isArray(submittedPermissions)
     ? { ...Object.fromEntries(NEW_MODULES.filter(([key]) => !Object.hasOwn(submittedPermissions,key)).map(([key]) => [key,previousPermissions[key]])), ...submittedPermissions } : submittedPermissions;
   if(permissions&&typeof permissions==='object'&&!Object.hasOwn(permissions,'profiles'))permissions.profiles=previousPermissions.profiles;
+  if(permissions&&typeof permissions==='object'){
+    if(!Object.hasOwn(permissions,'accounts'))permissions.accounts=previousPermissions.accounts;
+    for(const [module,actions] of Object.entries(ACTION_MODULES)){
+      const value=permissions[module];
+      if(!value||typeof value!=='object'||Array.isArray(value))continue;
+      permissions[module]={...value};
+      for(const action of actions)if(!Object.hasOwn(value,action))permissions[module][action]=action==='reset_password'?Boolean(previousPermissions[module]?.[action]):Boolean(value.manage);
+    }
+    if(permissions.tasks?.scopes&&!Object.hasOwn(permissions.tasks.scopes,'comment'))permissions.tasks={...permissions.tasks,scopes:{...permissions.tasks.scopes,comment:permissions.tasks.scopes.approve}};
+  }
   if(permissions?.profiles&&(!['none','self','department','all'].includes(permissions.profiles.scopes?.view)||permissions.profiles.manage||DATA_ACTIONS.some(action=>action!=='view'&&permissions.profiles.scopes?.[action]!=='none'))){
     return NextResponse.json({error:'Phạm vi xem Profile nhân sự không hợp lệ.'},{status:400});
   }
@@ -52,7 +62,9 @@ export const PUT = withAuth(async (req, ctx, user) => {
       !ORGANIZATION_SCOPES.includes(permissions.organization?.scope) ||
       permissions.organization.view !== (permissions.organization.scope !== 'none') ||
       permissions.organization.manage || SCOPED_MODULES.some((module) =>
-        DATA_ACTIONS.some((action) => !DATA_SCOPES.includes(permissions[module]?.scopes?.[action])))) {
+        DATA_ACTIONS.some((action) => !DATA_SCOPES.includes(permissions[module]?.scopes?.[action]))) ||
+      !DATA_SCOPES.includes(permissions.tasks?.scopes?.comment) ||
+      Object.entries(ACTION_MODULES).some(([module,actions])=>actions.some(action=>typeof permissions[module]?.[action]!=='boolean')||permissions[module].manage!==actions.some(action=>action!=='view'&&permissions[module][action]))) {
     return NextResponse.json({ error: 'Bộ quyền không hợp lệ' }, { status: 400 });
   }
   const name = typeof label === 'string' ? label.trim().replace(/\s+/g, ' ') : null;

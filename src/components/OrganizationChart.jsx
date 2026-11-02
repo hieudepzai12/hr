@@ -54,9 +54,9 @@ function Content({ mode }){
   }
   const ids=new Set(people.map(person=>person.id));const childrenByParent=new Map();const roots=[];
   for(const person of people){if(person.manager_id&&ids.has(person.manager_id)&&person.manager_id!==person.id){const children=childrenByParent.get(person.manager_id)||[];children.push(person);childrenByParent.set(person.manager_id,children);}else roots.push(person);}
-  return <Layout title={title} actions={can('employees','manage')&&<Link href="/nhan-vien" className="ui-button">Cập nhật nhân sự</Link>}>
+  return <Layout title={title} actions={can('employees','edit')&&<Link href="/nhan-vien" className="ui-button">Cập nhật nhân sự</Link>}>
     {mode==='company'&&<div className="ui-card mb-4 flex flex-wrap items-center justify-between gap-3 p-4"><Link href="/so-do-to-chuc/phong-ban" className="btn-primary">Mở sơ đồ phòng ban</Link></div>}
-    <div className="ui-card mb-4 grid gap-3 p-4 sm:grid-cols-2">
+    <div className="ui-filter-panel ui-card mb-3 grid gap-2 p-3 sm:grid-cols-2">
       <label className="text-sm"><span className="mb-1 block text-xs font-medium text-slate">Tìm kiếm</span><input aria-label="Tìm nhân sự hoặc chức danh" placeholder="Tìm người hoặc chức danh..." value={search} onChange={e=>setSearch(e.target.value)} className="ui-field"/></label>
       {mode!=='company'&&<label className="text-sm"><span className="mb-1 block text-xs font-medium text-slate">Phòng ban</span><select aria-label="Phòng ban" value={selectedDepartment} onChange={e=>setDepartment(e.target.value)} className="ui-field" disabled={!departments.length}>
         <option value="">Tất cả phòng ban được xem</option>

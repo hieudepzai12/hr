@@ -24,7 +24,7 @@ function Content(){
  const employees=data?.employees||[];
  const directors=employees.filter(isCompanyLeader);
  return <Layout title="Cơ cấu công ty" actions={can('staffing')&&<Link href="/dinh-bien" className="ui-button ui-button-primary">Định biên nhân sự</Link>}>
-  <div className="mb-4 max-w-xs"><MonthInput label="Tháng định biên" value={month} required onChange={value=>{if(value!==month){setData(null);setError('');setMonth(value);}}}/></div>
+  <div className="ui-filter-panel mb-3 max-w-xs"><MonthInput label="Tháng định biên" value={month} required onChange={value=>{if(value!==month){setData(null);setError('');setMonth(value);}}}/></div>
   {!month?<p className="ui-card ui-empty">Chọn đủ tháng và năm để xem cơ cấu.</p>:error?<p role="alert" className="ui-notice">{error}</p>:!data?<p role="status" className="ui-card ui-empty">Đang tải cơ cấu công ty...</p>:<section className="ui-card min-w-0 p-4 sm:p-6" aria-label="Sơ đồ cơ cấu công ty">
    <div className="mx-auto max-w-56 rounded-xl border border-[#14243d] bg-[#14243d] p-4 text-center font-semibold text-white">{directors.length?[...new Set(directors.flatMap(companyLeadershipTitles))].join(' · '):'OTIS Minh Châu'}</div>
    {!directors.length&&<p className="mt-2 text-center text-xs text-slate">Chưa có hồ sơ Giám đốc đang hoạt động.</p>}
