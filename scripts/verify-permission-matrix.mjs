@@ -21,6 +21,7 @@ const grants=(module,actions)=>{
   const p=defaultPermissions(role);
   p[module]={...p[module],...Object.fromEntries(ACTION_MODULES[module].map(action=>[action,actions.includes(action)]))};
   p[module].manage=actions.some(action=>action!=='view');if(p[module].manage)p[module].view=true;
+  if(module==='kpi')p.kpi.scope=p.kpi.view?'all':'none';
   return p;
 };
 const configure=permissions=>expect('/permissions',admin.cookie,'PUT',{role,permissions},200);

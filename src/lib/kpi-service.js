@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { transaction } from './db';
 import { canViewTask } from './task-access';
 import { canReport } from './report-service';
+import { canAccessKpiEmployee } from './access';
 
 const RATINGS = ['Không hoàn thành', 'Hoàn thành', 'Hoàn thành tốt'];
 const publicFields = 'id, employee_id, period, rating, comments, evaluated_by, created_at';
@@ -30,8 +31,8 @@ export async function saveKpi(req, user, evaluationId) {
       if (Number(existing.employee_id) !== Number(employee_id)) return invalid('Không thể đổi nhân viên của đánh giá đã lưu');
       previousEvidence = (await client.query('SELECT * FROM kpi_evidence WHERE evaluation_id=$1 ORDER BY id', [evaluationId])).rows;
     }
-    const target = (await client.query('SELECT role,status FROM employees WHERE id=$1', [employee_id])).rows[0];
-    if (!target || (!existing && target.status !== 'active') || (target.role === 'admin' && user.role !== 'admin')) {
+    const target = (await client.query('SELECT id,role,status,department_id FROM employees WHERE id=$1', [employee_id])).rows[0];
+    if (!target || (!existing && target.status !== 'active') || !canAccessKpiEmployee(user,target)) {
       return invalid('Không thể đánh giá nhân viên này', 403);
     }
     const evidence = [];

@@ -1,5 +1,18 @@
 import { DATA_SCOPES } from './permissions';
 
+export function kpiScope(user) {
+  const permission = user.permissions?.kpi;
+  if (!permission?.view) return 'none';
+  return DATA_SCOPES.includes(permission.scope) ? permission.scope : permission.manage ? 'all' : 'self';
+}
+
+export function canAccessKpiEmployee(user, employee) {
+  if (!employee || employee.role === 'admin' && user.role !== 'admin') return false;
+  const scope = kpiScope(user);
+  return scope === 'all' || scope === 'self' && Number(employee.id) === Number(user.id) ||
+    scope === 'department' && user.department_id != null && Number(employee.department_id) === Number(user.department_id);
+}
+
 export function scopeFor(user, module, action) {
   const scope = user.permissions?.[module]?.scopes?.[action];
   return DATA_SCOPES.includes(scope) ? scope : 'none';

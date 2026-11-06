@@ -29,7 +29,7 @@ function Content() {
     if (user?.role !== 'admin') return;
     api.get('/permissions').then(({ data }) => {
       setRoles(data);
-      const initial = data.find((item) => item.role === 'manager') || data.find((item) => item.role !== 'admin') || data[0];
+      const initial = data.find((item) => item.role.startsWith('custom_') && item.employee_count>0) || data.find((item) => item.role !== 'admin' && item.employee_count>0) || data[0];
       if (initial) {
         setRole(initial.role);
         setDraft(structuredClone(initial.permissions));
@@ -43,6 +43,7 @@ function Content() {
       if(action==='view'&&!next[key].view)for(const item of ACTION_MODULES[key])next[key][item]=false;
       next[key].manage=ACTION_MODULES[key].some(item=>item!=='view'&&next[key][item]);
       if(next[key].manage)next[key].view=true;
+      if(key==='kpi')next[key].scope=next[key].view?(next[key].scope&&next[key].scope!=='none'?next[key].scope:'department'):'none';
       return next;
     }
     if (action === 'view' && !next[key].view) next[key].manage = false;
@@ -61,7 +62,7 @@ function Content() {
     setSaving(true); setMessage('');
     try {
       const { data } = await api.put('/permissions', { role, permissions: draft });
-      setRoles((current) => current.map((item) => item.role === role ? data : item));
+      setRoles((current) => current.map((item) => item.role === role ? {...item,...data} : item));
       setMessage(`Đã lưu bộ quyền ${selected.label}.`);
     } catch (error) { setMessage(error.response?.data?.error || 'Không lưu được bộ quyền.'); }
     finally { setSaving(false); }
@@ -85,7 +86,7 @@ function Content() {
     setSaving(true); setEditError('');
     try {
       const { data } = await api.put('/permissions', { role, label: editName, permissions: selected.permissions });
-      setRoles((current) => current.map((item) => item.role === role ? data : item));
+      setRoles((current) => current.map((item) => item.role === role ? {...item,...data} : item));
       setEditOpen(false);
       setMessage(`Đã đổi tên bộ quyền thành ${data.label}.`);
     } catch (error) { setEditError(error.response?.data?.error || 'Không đổi được tên bộ quyền.'); }
@@ -109,7 +110,7 @@ function Content() {
       <div className="min-w-0 bg-paper-raised rounded-lg border border-line p-3 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain">
         <div className="flex items-center justify-between gap-2 px-3 py-2"><h2 className="text-sm font-semibold">Bộ phân quyền</h2><button onClick={() => { setCreateError(''); setCreateOpen(true); }} className="p-1.5 rounded text-teal hover:bg-paper focus-ring" aria-label="Thêm bộ phân quyền" title="Thêm bộ phân quyền"><Plus size={18} /></button></div>
         {roles.map((item) => <button key={item.role} onClick={() => { setRole(item.role); setDraft(structuredClone(item.permissions)); setMessage(''); }} className={`w-full text-left px-3 py-3 rounded-md text-sm ${role === item.role ? 'bg-teal text-white' : 'hover:bg-paper'}`}>
-          <span className="font-medium">{item.label}</span>{item.role === 'admin' && <span className="block text-xs opacity-70">Tài khoản hệ thống · cố định</span>}
+          <span className="font-medium">{item.label}</span><span className="mt-1 block text-xs opacity-70">{item.employee_count?`${item.employee_count} tài khoản · ${item.active_count} hoạt động`:'Chưa có tài khoản sử dụng'}</span>{item.role === 'admin' && <span className="block text-xs opacity-70">Tài khoản hệ thống · cố định</span>}
         </button>)}
       </div>
       <div role="region" aria-label="Chi tiết quyền của vai trò" tabIndex={0} className="min-w-0 bg-paper-raised rounded-lg border border-line p-5 focus-ring lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain">
@@ -122,7 +123,7 @@ function Content() {
             </div>
           </div>
           <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b border-line text-left"><th className="py-3">Mục</th><th className="py-3 text-center">Được xem</th><th className="py-3 text-center">Được quản lý</th></tr></thead><tbody>{MODULES.filter(([key]) => !SCOPED_MODULES.includes(key)&&!ACTION_MODULES[key]).map(([key, label]) => <tr key={key} className="border-b border-line last:border-0"><td className="py-3">{label}</td>{key === 'organization' ? <td colSpan={2} className="py-3 text-center"><select aria-label="Phạm vi xem sơ đồ tổ chức" value={draft.organization?.scope || 'none'} disabled={role === 'admin'||saving} onChange={(event) => setDraft((current) => ({ ...current, organization: { ...current.organization, scope: event.target.value, view: event.target.value !== 'none', manage: false } }))} className="w-full max-w-xs rounded-md border border-line bg-white px-3 py-2 text-sm disabled:bg-paper"><option value="none">Không được xem</option><option value="department">Chỉ phòng ban của mình</option><option value="full">Toàn công ty</option></select></td> : ['view', 'manage'].map((action) => <td key={action} className="py-3 text-center">{key === 'dashboard' && action === 'manage' ? <span className="text-slate" title="Tổng quan chỉ có quyền xem">—</span> : <input type="checkbox" checked={Boolean(draft[key]?.[action])} onChange={() => toggle(key, action)} disabled={role === 'admin'||saving} aria-label={`${action === 'view' ? 'Xem' : 'Quản lý'} ${label}`} className="accent-teal h-4 w-4" />}</td>)}</tr>)}</tbody></table></div>
-          <div className="mt-5 space-y-4">{Object.entries(ACTION_MODULES).map(([module,actions])=><section key={module} className="rounded-lg border border-line p-4"><h3 className="mb-3 text-sm font-semibold">{MODULES.find(([key])=>key===module)?.[1]}</h3><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{actions.map(action=><label key={action} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={Boolean(draft[module]?.[action])} disabled={role==='admin'||saving} onChange={()=>toggle(module,action)} aria-label={`${action} ${module}`} className="h-4 w-4" />{{view:'Xem',create:'Tạo',edit:'Sửa',delete:'Xóa',deactivate:'Ngừng hoạt động',restore:'Kích hoạt lại',reset_password:'Đặt lại mật khẩu'}[action]}</label>)}</div></section>)}</div>
+          <div className="mt-5 space-y-4">{Object.entries(ACTION_MODULES).map(([module,actions])=><section key={module} className="rounded-lg border border-line p-4"><h3 className="mb-3 text-sm font-semibold">{MODULES.find(([key])=>key===module)?.[1]}</h3><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{actions.map(action=><label key={action} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={Boolean(draft[module]?.[action])} disabled={role==='admin'||saving} onChange={()=>toggle(module,action)} aria-label={`${action} ${module}`} className="h-4 w-4" />{{view:'Xem',create:'Tạo',edit:'Sửa',delete:'Xóa',deactivate:'Ngừng hoạt động',restore:'Kích hoạt lại',reset_password:'Đặt lại mật khẩu'}[action]}</label>)}</div>{module==='kpi'&&draft.kpi?.view&&<label className="mt-4 block max-w-xs text-xs">Phạm vi KPI<select aria-label="scope kpi" value={draft.kpi.scope||'self'} disabled={role==='admin'||saving} onChange={event=>setDraft(current=>({...current,kpi:{...current.kpi,scope:event.target.value}}))} className="ui-field mt-1"><option value="self">Bản thân</option><option value="department">Phòng ban</option><option value="all">Toàn công ty</option></select></label>}</section>)}</div>
           <div className="mt-6 space-y-4"><h3 className="font-semibold">Phạm vi quyền dữ liệu</h3>{SCOPED_MODULES.map((module) => <div key={module} className="rounded-md border border-line p-3"><div className="mb-3 text-sm font-medium">{MODULES.find(([key]) => key === module)?.[1]}</div><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{moduleActions(module).filter(action=>module!=='reports'||action!=='approve').map((action) => <label key={action} className="text-xs">{{ view: 'Xem', create: 'Tạo', edit: 'Sửa', approve: module==='tasks'?'Nghiệm thu':'Duyệt', comment:'Ý kiến lãnh đạo', delete: module==='customers'?'Ngừng hoạt động':'Xóa', restore: 'Khôi phục', print: 'In' }[action]}<select aria-label={`${action} ${module}`} value={draft[module]?.scopes?.[action] || 'none'} disabled={role === 'admin'||saving} onChange={(event) => setScope(module, action, event.target.value)} className="mt-1 w-full rounded-md border border-line bg-white px-2 py-2"><option value="none">Không có</option><option value="self">Bản thân</option><option value="department">Phòng ban</option><option value="all">Toàn bộ</option></select></label>)}</div></div>)}</div>
         </> : <p className="text-sm text-slate">Đang tải bộ quyền...</p>}
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { withAuth } from '@/lib/auth';
+import { withAuth, forbidden } from '@/lib/auth';
+import { kpiScope } from '@/lib/access';
 import { parsePagination, pagedResult, appendPagination } from '@/lib/pagination';
 import { saveKpi } from '@/lib/kpi-service';
 
@@ -23,10 +24,16 @@ export const GET = withAuth(async (req, ctx, user) => {
              LEFT JOIN employees ev ON k.evaluated_by = ev.id
              WHERE 1=1`;
   const params = [];
-  if (!user.permissions.kpi.manage) {
+  const scope = kpiScope(user);
+  if (scope === 'none') return forbidden();
+  if (scope === 'self') {
     params.push(user.id);
     sql += ` AND k.employee_id = $${params.length}`;
-  } else if (employee_id) {
+  } else if (scope === 'department') {
+    params.push(user.department_id ?? -1);
+    sql += ` AND e.department_id = $${params.length}`;
+  }
+  if (employee_id) {
     params.push(employee_id);
     sql += ` AND k.employee_id = $${params.length}`;
   }

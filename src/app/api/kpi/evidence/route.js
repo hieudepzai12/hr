@@ -1,13 +1,16 @@
 import { NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { query, queryOne } from '@/lib/db';
 import { withAuth, forbidden } from '@/lib/auth';
 import { canViewTask } from '@/lib/task-access';
 import { canReport } from '@/lib/report-service';
+import { canAccessKpiEmployee } from '@/lib/access';
 
 export const GET = withAuth(async (req, ctx, user) => {
   const employeeId = Number(new URL(req.url).searchParams.get('employee_id') || user.id);
   if (!Number.isSafeInteger(employeeId) || employeeId <= 0) return NextResponse.json({ error: 'Nhân viên không hợp lệ' }, { status: 400 });
   if (employeeId !== Number(user.id) && !user.permissions.kpi.create && !user.permissions.kpi.edit) return forbidden();
+  const employee=await queryOne('SELECT id,role,department_id FROM employees WHERE id=$1',[employeeId]);
+  if (!canAccessKpiEmployee(user,employee)) return forbidden();
   const [tasks, reports] = await Promise.all([
     query(`SELECT t.id, t.title, t.status, t.due_date, t.completed_at, t.accepted_at,
       t.assignee_id, t.department_id FROM tasks t WHERE t.deleted_at IS NULL

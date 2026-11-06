@@ -9,7 +9,12 @@ import { writeAudit } from '@/lib/audit';
 
 const auditClient = { query };
 
-export const GET = withAuth(async () => NextResponse.json(await listRoles()), { roles: ['admin'] });
+export const GET = withAuth(async () => {
+  const [roles,counts] = await Promise.all([listRoles(),query("SELECT role,COUNT(*)::int AS employee_count,COUNT(*) FILTER(WHERE status='active')::int AS active_count FROM employees GROUP BY role")]);
+  const usage = new Map(counts.rows.map(row=>[row.role,row]));
+  return NextResponse.json(roles.map(role=>({...role,employee_count:usage.get(role.role)?.employee_count||0,active_count:usage.get(role.role)?.active_count||0}))
+    .sort((a,b)=>Number(b.employee_count>0)-Number(a.employee_count>0)));
+}, { roles: ['admin'] });
 
 export const POST = withAuth(async (req, ctx, user) => {
   const { label } = await req.json();
@@ -50,6 +55,10 @@ export const PUT = withAuth(async (req, ctx, user) => {
     }
     if(permissions.tasks?.scopes&&!Object.hasOwn(permissions.tasks.scopes,'comment'))permissions.tasks={...permissions.tasks,scopes:{...permissions.tasks.scopes,comment:permissions.tasks.scopes.approve}};
   }
+  if(permissions?.kpi && !Object.hasOwn(permissions.kpi,'scope')) {
+    const previousScope=previousPermissions.kpi?.scope;
+    permissions.kpi={...permissions.kpi,scope:permissions.kpi.view?(previousScope&&previousScope!=='none'?previousScope:permissions.kpi.manage?'all':'self'):'none'};
+  }
   if(permissions?.profiles&&(!['none','self','department','all'].includes(permissions.profiles.scopes?.view)||permissions.profiles.manage||DATA_ACTIONS.some(action=>action!=='view'&&permissions.profiles.scopes?.[action]!=='none'))){
     return NextResponse.json({error:'Phạm vi xem Profile nhân sự không hợp lệ.'},{status:400});
   }
@@ -64,6 +73,7 @@ export const PUT = withAuth(async (req, ctx, user) => {
       permissions.organization.manage || SCOPED_MODULES.some((module) =>
         DATA_ACTIONS.some((action) => !DATA_SCOPES.includes(permissions[module]?.scopes?.[action]))) ||
       !DATA_SCOPES.includes(permissions.tasks?.scopes?.comment) ||
+      !DATA_SCOPES.includes(permissions.kpi?.scope) || permissions.kpi.view!==(permissions.kpi.scope!=='none') ||
       Object.entries(ACTION_MODULES).some(([module,actions])=>actions.some(action=>typeof permissions[module]?.[action]!=='boolean')||permissions[module].manage!==actions.some(action=>action!=='view'&&permissions[module][action]))) {
     return NextResponse.json({ error: 'Bộ quyền không hợp lệ' }, { status: 400 });
   }

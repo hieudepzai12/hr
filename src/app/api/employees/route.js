@@ -6,6 +6,7 @@ import { roleExists } from '@/lib/role-permissions';
 import { validateManagerAssignment } from '@/lib/organization';
 import {employeePosition} from '@/lib/employee-job-titles';
 import { parsePagination, pagedResult, appendPagination } from '@/lib/pagination';
+import { kpiScope } from '@/lib/access';
 
 const COLORS = ['#2C5F5D', '#C97B4A', '#5B5F97', '#8A9B6E', '#B85C5C', '#4A7B8C'];
 
@@ -20,7 +21,7 @@ export const GET = withAuth(async (req, ctx, user) => {
   if (fields && fields !== 'options') return NextResponse.json({ error: 'Trường dữ liệu không hợp lệ' }, { status: 400 });
   const accounts = searchParams.get('accounts') === '1';
   const isManager = accounts ? user.permissions.accounts.view : Boolean(user.permissions.employees.manage);
-  const canListAssignees = fields === 'options' && (user.permissions.accounts.view || user.permissions.kpi.create || user.permissions.kpi.edit ||
+  const canListAssignees = fields === 'options' && (user.permissions.accounts.view || kpiScope(user)==='all' && (user.permissions.kpi.create || user.permissions.kpi.edit) ||
     ['tasks','reports','customers'].some(module=>user.permissions[module].scopes?.view==='all'));
 
   let sql = fields === 'options' ? `SELECT e.id, e.full_name, e.role, e.position, e.department_id

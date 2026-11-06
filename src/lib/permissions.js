@@ -38,6 +38,10 @@ function actionPermissions(role, permissions, overrides = {}) {
       : Boolean(value && typeof value.manage === 'boolean' ? value.manage : legacy.manage);
     result.manage = actions.some(action => action !== 'view' && result[action]);
     if (result.manage) result.view = true;
+    if (module === 'kpi') {
+      result.scope = !result.view ? 'none' : DATA_SCOPES.includes(value?.scope) && value.scope !== 'none'
+        ? value.scope : result.manage ? 'all' : 'self';
+    }
     permissions[module] = result;
   }
   return permissions;
