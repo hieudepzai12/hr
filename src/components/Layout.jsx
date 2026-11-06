@@ -3,12 +3,14 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bell, Menu } from 'lucide-react';
+import { Bell, BookOpen, Menu } from 'lucide-react';
 import { getTaskAlerts } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import AccountMenu from './AccountMenu';
 import Sidebar from './Sidebar';
 import NavigationSearch from './NavigationSearch';
+
+const USER_GUIDE_URL = 'https://hieu-4.gitbook.io/huong-dan-thao-tac-phan-mem-otis-minh-chau';
 
 export default function Layout({ title, subtitle, actions, children }) {
   const pathname = usePathname();
@@ -86,6 +88,7 @@ export default function Layout({ title, subtitle, actions, children }) {
         </div>
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <NavigationSearch />
+          {USER_GUIDE_URL ? <a href={USER_GUIDE_URL} target="_blank" rel="noopener noreferrer" title="Hướng dẫn sử dụng (mở tab mới)" aria-label="Hướng dẫn sử dụng (mở tab mới)" className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-line px-2.5 text-sm font-medium text-ink hover:bg-paper focus-ring"><BookOpen size={18} aria-hidden="true" /><span className="hidden xl:inline">Hướng dẫn</span></a> : <button type="button" disabled title="Chưa cấu hình đường dẫn GitBook" aria-label="Hướng dẫn sử dụng: chưa cấu hình đường dẫn GitBook" className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-line px-2.5 text-sm font-medium text-slate disabled:cursor-default"><BookOpen size={18} aria-hidden="true" /><span className="hidden xl:inline">Hướng dẫn</span></button>}
           {canViewTasks && <div ref={notificationPanel} className="relative">
             <button type="button" aria-label={`Thông báo công việc: ${alerts.length}`} aria-expanded={notificationsOpen} title="Thông báo công việc" onClick={() => setNotificationsOpen((current) => !current)} className="icon-button relative">
               <Bell size={19} />{alerts.length > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-clay px-1.5 text-[10px] font-semibold text-white">{alerts.length > 99 ? '99+' : alerts.length}</span>}
